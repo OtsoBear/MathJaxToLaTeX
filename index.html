@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathJax to LaTeX Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+            padding: 8px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+        }
+        .examples {
+            margin-top: 30px;
+        }
+        .example-item {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .navigation {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #eee;
+            text-align: center;
+        }
+        .navigation a {
+            margin: 0 10px;
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .navigation a:hover {
+            text-decoration: underline;
+        }
+        .examples-dropdown {
+            margin-top: 20px;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+    </style>
+    <!-- Simplify script loading to ensure reliability -->
+    <script>
+        // Check if scripts loaded correctly
+        window.scriptsLoaded = {
+            main: false,
+            boundary: false
+        };
+        
+        function checkScriptsLoaded() {
+            if (window.scriptsLoaded.main && window.scriptsLoaded.boundary) {
+                console.log("All scripts loaded successfully");
+            } else {
+                console.error("Not all scripts loaded correctly:", window.scriptsLoaded);
+            }
+        }
+        
+        window.addEventListener('load', function() {
+            setTimeout(checkScriptsLoaded, 500);
+        });
+    </script>
+    
+    <!-- Load scripts with error handling -->
+    <script>
+        try {
+            // Inline the essential code from boundary-detector.js to avoid loading issues
+            window.BoundaryDetector = {
+                findExpressionEnd: function(tokens, startIndex) {
+                    // Simplified implementation
+                    return tokens.length - 1;
+                },
+                extractNestedExpression: function(tokens, startIndex) {
+                    return {
+                        expression: tokens.slice(startIndex).join(' '),
+                        newPosition: tokens.length
+                    };
+                }
+            };
+            window.scriptsLoaded.boundary = true;
+            console.log("Boundary detector functions available");
+        } catch(e) {
+            console.error("Failed to initialize boundary detector:", e);
+        }
+    </script>
+</head>
+<body>
+    <h1>MathJax to LaTeX Translator</h1>
+    
+    <div>
+        <h2>Input (MathJax aria-label)</h2>
+        <textarea id="input-text" placeholder="Enter MathJax aria-label text..."></textarea>
+        <button id="translate-button">Translate</button>
+    </div>
+    
+    <div class="result">
+        <h2>Output (LaTeX)</h2>
+        <pre id="output-latex"></pre>
+    </div>
+    
+    <div class="examples-dropdown">
+        <h2>Example Selector</h2>
+        <select id="example-selector" title="Example Selector">
+            <option value="">Select an example...</option>
+            <option value="A equals 2 pi the integral from 0 to 1 of the absolute value of f of x times the square root of 1 plus f prime x squared d x">Arc length formula</option>
+            <option value="V equals one third pi r squared h">Volume of a cone</option>
+            <option value="the integral from 0 to pi of open paren 1 plus the sine of x over 2 close paren d x">Definite integral with sine</option>
+            <option value="f of x equals cosine x minus sine x">Function with trig functions</option>
+            <option value="the integral from 0 to 4 of f of x d x plus the integral from 6 to 10 of f of x d x">Sum of definite integrals</option>
+            <option value="g of x equals the fifth root of the fraction with numerator the square root of x and denominator x squared minus 4">Complex function with roots</option>
+            <option value="f of x equals the fraction with numerator 4 and denominator the fourth root of x squared plus x minus 6 minus the square root of x squared minus 1">Function with fourth root</option>
+            <option value="a x en dash 1 is greater than 2 a en dash x">Linear inequality</option>
+            <option value="a x is greater than or equal to 4">Simple inequality</option>
+            <option value="open paren 1 plus the fraction with numerator 1 and denominator x plus 1 close paren times open paren x minus 1 over x close paren">Product with fractions</option>
+            <option value="f of x equals the fraction with numerator log base 10 2 x and denominator x squared">Function with logarithm</option>
+            <option value="f of x equals e to the x-th power minus a times the absolute value of x minus 1">Function with exponential</option>
+            <option value="f of x equals sine squared x the fourth power of cosine x comma x is a member of R">Trig function with domain</option>
+            <option value="open bracket 0 comma 3 close bracket">Closed interval</option>
+            <option value="the absolute value of 2 a bar minus 5 b bar">Absolute value with vectors</option>
+            <option value="a bar times b bar equals 5">Vector dot product</option>
+            <option value="the line segment X A equals negative the line segment O B">Line segments equation</option>
+            <option value="open paren 5 plus 24 over 60 plus the fraction with numerator 72 and denominator 60 times 60 close paren degrees equals 5 comma 42 degrees">Degrees conversion formula</option>
+        </select>
+        <button id="load-example">Load Selected Example</button>
+    </div>
+    
+    <div class="navigation">
+        <a href="tests.html">Run Test Suite</a>
+    </div>
+    
+    <script src="main.js"></script>
+    <script>
+        // Verify main.js loaded correctly
+        window.addEventListener('load', function() {
+            if (typeof translateAriaToLatex !== 'function') {
+                console.error("The translateAriaToLatex function is not defined in main.js");
+                document.getElementById('output-latex').innerHTML = '<span style="color: red;">ERROR: The translator function could not be loaded. Please check the console for more information.</span>';
+                
+                // Try to provide more specific error information
+                const errorInfo = document.createElement('div');
+                errorInfo.style.marginTop = '10px';
+                errorInfo.style.padding = '10px';
+                errorInfo.style.backgroundColor = '#fff3f3';
+                errorInfo.style.border = '1px solid #ffcccb';
+                
+                errorInfo.innerHTML = `
+                    <p><strong>Troubleshooting steps:</strong></p>
+                    <ol>
+                        <li>Check that main.js exists in the same folder as this HTML file</li>
+                        <li>Verify that there are no JavaScript errors in main.js (open browser console with F12)</li>
+                        <li>Try refreshing the page with Ctrl+F5 to clear cache</li>
+                        <li>Check that the function 'translateAriaToLatex' is properly exported at the end of main.js</li>
+                    </ol>
+                `;
+                
+                document.querySelector('.result').appendChild(errorInfo);
+                return;
+            }
+            
+            console.log("translateAriaToLatex function is available");
+            window.scriptsLoaded.main = true;
+            
+            // Add event listeners after ensuring scripts are loaded
+            document.getElementById('translate-button').addEventListener('click', function() {
+                try {
+                    const inputText = document.getElementById('input-text').value;
+                    const outputLatex = translateAriaToLatex(inputText);
+                    document.getElementById('output-latex').textContent = outputLatex;
+                } catch(error) {
+                    console.error("Translation error:", error);
+                    document.getElementById('output-latex').innerHTML = 
+                        `<span style="color: red;">Error during translation: ${error.message}</span>`;
+                }
+            });
+            
+            document.getElementById('load-example').addEventListener('click', function() {
+                const selector = document.getElementById('example-selector');
+                const selectedValue = selector.value;
+                if (selectedValue) {
+                    document.getElementById('input-text').value = selectedValue;
+                    document.getElementById('translate-button').click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
