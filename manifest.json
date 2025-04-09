@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "MathJax Copy Tool",
+  "version": "1.0",
+  "description": "Copy LaTeX from MathJax elements by clicking on them",
+  "permissions": ["activeTab", "clipboardWrite"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js", "translate.js", "fileunicode.js", "popup.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+    "48": "icon.png"
+    }
+  },
+  "icons": {
+    "48": "icon.png"
+  }
+}

@@ -4,6 +4,7 @@
  */
 
 // Main conversion function
+
 function convertMathMLToLatex(node) {
     const nodeType = node.getAttribute ? node.getAttribute('data-mml-node') : 'none';
     const id = node.getAttribute ? node.getAttribute('data-semantic-id') : 'none';

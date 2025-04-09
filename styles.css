@@ -1,0 +1,39 @@
+/* Style for MathJax elements that can be copied */
+.mathjax-copyable {
+  position: relative;
+  cursor: pointer;
+}
+
+/* Overlay effect on hover */
+.mathjax-copyable:hover::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  background-color: rgba(247, 0, 255, 0.2); 
+  border: 1px solid rgba(247, 0, 255, 0.5); 
+  border-radius: 3px;
+  pointer-events: none; /* Ensure it doesn't block clicks */
+  z-index: 9999;
+}
+
+/* Copied feedback popup */
+.mathjax-copy-feedback {
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 10000;
+  animation: fadeOut 2s forwards;
+}
+
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
