@@ -3,23 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathJax to LaTeX Translator</title>
+    <title>MathML to LaTeX Converter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            line-height: 1.6;
         }
         textarea {
             width: 100%;
-            height: 100px;
-            margin: 10px 0;
-            padding: 8px;
+            min-height: 200px;
+            margin-bottom: 10px;
+            font-family: monospace;
         }
         button {
-            padding: 8px 16px;
+            padding: 10px 15px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -28,186 +27,1335 @@
         button:hover {
             background-color: #45a049;
         }
-        .result {
+        #output {
             margin-top: 20px;
             padding: 10px;
-            background-color: #f8f8f8;
             border: 1px solid #ddd;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-family: monospace;
         }
-        .examples {
-            margin-top: 30px;
-        }
-        .example-item {
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .navigation {
-            margin-top: 20px;
+        .example {
+            background-color: #f5f5f5;
             padding: 10px;
-            background-color: #eee;
-            text-align: center;
-        }
-        .navigation a {
-            margin: 0 10px;
-            color: #4CAF50;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .navigation a:hover {
-            text-decoration: underline;
-        }
-        .examples-dropdown {
-            margin-top: 20px;
-        }
-        select {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #4CAF50;
         }
     </style>
-    <!-- Simplify script loading to ensure reliability -->
-    <script>
-        // Check if scripts loaded correctly
-        window.scriptsLoaded = {
-            main: false,
-            boundary: false
-        };
-        
-        function checkScriptsLoaded() {
-            if (window.scriptsLoaded.main && window.scriptsLoaded.boundary) {
-                console.log("All scripts loaded successfully");
-            } else {
-                console.error("Not all scripts loaded correctly:", window.scriptsLoaded);
-            }
-        }
-        
-        window.addEventListener('load', function() {
-            setTimeout(checkScriptsLoaded, 500);
-        });
-    </script>
-    
-    <!-- Load scripts with error handling -->
-    <script>
-        try {
-            // Inline the essential code from boundary-detector.js to avoid loading issues
-            window.BoundaryDetector = {
-                findExpressionEnd: function(tokens, startIndex) {
-                    // Simplified implementation
-                    return tokens.length - 1;
-                },
-                extractNestedExpression: function(tokens, startIndex) {
-                    return {
-                        expression: tokens.slice(startIndex).join(' '),
-                        newPosition: tokens.length
-                    };
-                }
-            };
-            window.scriptsLoaded.boundary = true;
-            console.log("Boundary detector functions available");
-        } catch(e) {
-            console.error("Failed to initialize boundary detector:", e);
-        }
-    </script>
 </head>
 <body>
-    <h1>MathJax to LaTeX Translator</h1>
+    <h1>MathML to LaTeX Converter</h1>
     
-    <div>
-        <h2>Input (MathJax aria-label)</h2>
-        <textarea id="input-text" placeholder="Enter MathJax aria-label text..."></textarea>
-        <button id="translate-button">Translate</button>
+    <h2>Input (MathML)</h2>
+    <textarea id="mathmlInput" placeholder="Paste MathML content here..."></textarea>
+    <button onclick="convertToLatex()">Convert to LaTeX</button>
+    
+    <h2>Output (LaTeX)</h2>
+    <div id="output"></div>
+    
+    <h3>Example:</h3>
+    <div class="example">
+        <p>Paste MathML content like:</p>
+        <code>&lt;g data-mml-node="math"&gt;...&lt;/g&gt;</code>
     </div>
     
-    <div class="result">
-        <h2>Output (LaTeX)</h2>
-        <pre id="output-latex"></pre>
-    </div>
+    <!-- Include the Unicode mapping file -->
+    <script src="fileunicode.js"></script>
     
-    <div class="examples-dropdown">
-        <h2>Example Selector</h2>
-        <select id="example-selector" title="Example Selector">
-            <option value="">Select an example...</option>
-            <option value="A equals 2 pi the integral from 0 to 1 of the absolute value of f of x times the square root of 1 plus f prime x squared d x">Arc length formula</option>
-            <option value="V equals one third pi r squared h">Volume of a cone</option>
-            <option value="the integral from 0 to pi of open paren 1 plus the sine of x over 2 close paren d x">Definite integral with sine</option>
-            <option value="f of x equals cosine x minus sine x">Function with trig functions</option>
-            <option value="the integral from 0 to 4 of f of x d x plus the integral from 6 to 10 of f of x d x">Sum of definite integrals</option>
-            <option value="g of x equals the fifth root of the fraction with numerator the square root of x and denominator x squared minus 4">Complex function with roots</option>
-            <option value="f of x equals the fraction with numerator 4 and denominator the fourth root of x squared plus x minus 6 minus the square root of x squared minus 1">Function with fourth root</option>
-            <option value="a x en dash 1 is greater than 2 a en dash x">Linear inequality</option>
-            <option value="a x is greater than or equal to 4">Simple inequality</option>
-            <option value="open paren 1 plus the fraction with numerator 1 and denominator x plus 1 close paren times open paren x minus 1 over x close paren">Product with fractions</option>
-            <option value="f of x equals the fraction with numerator log base 10 2 x and denominator x squared">Function with logarithm</option>
-            <option value="f of x equals e to the x-th power minus a times the absolute value of x minus 1">Function with exponential</option>
-            <option value="f of x equals sine squared x the fourth power of cosine x comma x is a member of R">Trig function with domain</option>
-            <option value="open bracket 0 comma 3 close bracket">Closed interval</option>
-            <option value="the absolute value of 2 a bar minus 5 b bar">Absolute value with vectors</option>
-            <option value="a bar times b bar equals 5">Vector dot product</option>
-            <option value="the line segment X A equals negative the line segment O B">Line segments equation</option>
-            <option value="open paren 5 plus 24 over 60 plus the fraction with numerator 72 and denominator 60 times 60 close paren degrees equals 5 comma 42 degrees">Degrees conversion formula</option>
-        </select>
-        <button id="load-example">Load Selected Example</button>
-    </div>
-    
-    <div class="navigation">
-        <a href="tests.html">Run Test Suite</a>
-    </div>
-    
-    <script src="main.js"></script>
     <script>
-        // Verify main.js loaded correctly
-        window.addEventListener('load', function() {
-            if (typeof translateAriaToLatex !== 'function') {
-                console.error("The translateAriaToLatex function is not defined in main.js");
-                document.getElementById('output-latex').innerHTML = '<span style="color: red;">ERROR: The translator function could not be loaded. Please check the console for more information.</span>';
+        function convertToLatex() {
+            const mathmlInput = document.getElementById('mathmlInput').value;
+            console.log('INPUT:', mathmlInput);
+            
+            try {
+                // Create a temporary div to hold the parsed MathML
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = mathmlInput;
+                console.log('PARSED HTML:', tempDiv.innerHTML);
                 
-                // Try to provide more specific error information
-                const errorInfo = document.createElement('div');
-                errorInfo.style.marginTop = '10px';
-                errorInfo.style.padding = '10px';
-                errorInfo.style.backgroundColor = '#fff3f3';
-                errorInfo.style.border = '1px solid #ffcccb';
+                // Get the MathML node
+                const mathNode = tempDiv.querySelector('[data-mml-node="math"]');
+                console.log('Found math node:', mathNode ? 'Yes' : 'No');
                 
-                errorInfo.innerHTML = `
-                    <p><strong>Troubleshooting steps:</strong></p>
-                    <ol>
-                        <li>Check that main.js exists in the same folder as this HTML file</li>
-                        <li>Verify that there are no JavaScript errors in main.js (open browser console with F12)</li>
-                        <li>Try refreshing the page with Ctrl+F5 to clear cache</li>
-                        <li>Check that the function 'translateAriaToLatex' is properly exported at the end of main.js</li>
-                    </ol>
-                `;
+                if (!mathNode) {
+                    document.getElementById('output').textContent = "No valid MathML found!";
+                    return;
+                }
                 
-                document.querySelector('.result').appendChild(errorInfo);
+                // Log the structure of the math node for debugging
+                console.log('Math node structure:', mathNode.outerHTML);
+                
+                // Convert the MathML node to LaTeX
+                console.log('Starting conversion to LaTeX');
+                const latex = convertMathMLToLatex(mathNode);
+                console.log('FINAL LATEX:', latex);
+                
+                // Display the result
+                document.getElementById('output').textContent = latex;
+            } catch (error) {
+                document.getElementById('output').textContent = "Error converting MathML: " + error.message;
+                console.error('CONVERSION ERROR:', error);
+            }
+        }
+
+        function convertMathMLToLatex(node) {
+            const nodeType = node.getAttribute ? node.getAttribute('data-mml-node') : 'none';
+            const id = node.getAttribute ? node.getAttribute('data-semantic-id') : 'none';
+            console.log(`CONVERT NODE: type=${nodeType}, id=${id}, text=${node.textContent?.substring(0, 20)}`);
+            
+            // Remove all special case handling - we'll use a general approach
+            if (!node) {
+                console.log('NULL NODE');
+                return '';
+            }
+            
+            // Skip certain nodes
+            if (node.nodeType !== 1) { // Not an element node
+                console.log(`TEXT NODE: "${node.textContent?.trim()}"`);
+                return node.nodeType === 3 ? node.textContent.trim() : '';
+            }
+            
+            // Skip non-content elements
+            if (node.tagName.toLowerCase() === 'use' || 
+                node.tagName.toLowerCase() === 'rect') {
+                console.log(`SKIP NODE: ${node.tagName}`);
+                return '';
+            }
+            
+            // Get node type
+            console.log(`PROCESSING NODE: ${nodeType || 'unknown'}`);
+            
+            // Handle based on node type
+            if (!nodeType) {
+                console.log('NO NODE TYPE - PROCESSING CHILDREN');
+                return processChildren(node);
+            }
+            
+            switch (nodeType) {
+                case 'math':
+                    console.log('MATH NODE');
+                    // First check for data-semantic attributes
+                    const semanticStructure = node.getAttribute('data-semantic-structure');
+                    if (semanticStructure) {
+                        console.log('SEMANTIC STRUCTURE:', semanticStructure);
+                    }
+                    
+                    return processChildren(node);
+                
+                case 'mrow':
+                    console.log('MROW NODE');
+                    // For equation patterns (like function applications), we need to handle them properly
+                    if (node.getAttribute && node.getAttribute('data-semantic-role') === "equality") {
+                        console.log('EQUALITY NODE FOUND');
+                        // This is an equation with equals sign
+                        const children = Array.from(node.children || []);
+                        
+                        // Find the equals sign to split left and right sides
+                        let equalsIndex = -1;
+                        for (let i = 0; i < children.length; i++) {
+                            if (children[i].getAttribute('data-mml-node') === 'mo' && 
+                                getNodeContent(children[i]) === '=') {
+                                equalsIndex = i;
+                                console.log('EQUALS SIGN FOUND AT INDEX', i);
+                                break;
+                            }
+                        }
+                        
+                        if (equalsIndex > 0) {
+                            const leftSide = children.slice(0, equalsIndex);
+                            const rightSide = children.slice(equalsIndex + 1);
+                            console.log('LEFT SIDE NODES:', leftSide.length);
+                            console.log('RIGHT SIDE NODES:', rightSide.length);
+                            
+                            const leftLatex = leftSide.map(child => convertMathMLToLatex(child)).join('');
+                            const rightLatex = rightSide.map(child => convertMathMLToLatex(child)).join('');
+                            
+                            console.log('LEFT LATEX:', leftLatex);
+                            console.log('RIGHT LATEX:', rightLatex);
+                            
+                            return leftLatex + '=' + rightLatex;
+                        }
+                    }
+
+                    // Check if this mrow represents a function application
+                    if (isImplicitFunction(node)) {
+                        console.log('IMPLICIT FUNCTION DETECTED');
+                        const func = node.querySelector('[data-mml-node="mi"]');
+                        const arg = node.querySelector('[data-mml-node="mrow"]');
+                        
+                        console.log('FUNCTION NODE:', func?.textContent);
+                        console.log('ARGUMENT NODE:', arg?.textContent);
+                        
+                        if (func && arg) {
+                            // Process the argument properly to avoid double parentheses
+                            const processedArg = processArgumentParentheses(arg);
+                            const result = convertMathMLToLatex(func) + processedArg;
+                            console.log('FUNCTION RESULT:', result);
+                            return result;
+                        }
+                    }
+                    return processChildren(node);
+                
+                case 'mi':
+                    console.log('MI NODE:', node.textContent);
+                    // Handle identifiers
+                    const mi = getNodeContent(node);
+                    // Check if this is a standard math function
+                    if (isStandardFunction(mi)) {
+                        console.log('STANDARD FUNCTION:', mi);
+                        return '\\' + mi;
+                    }
+                    
+                    // Check if it's part of a function name (like 'c' for cos, 's' for sin)
+                    if (node.parentNode && 
+                        (['cos', 'sin', 'tan', 'cot', 'sec', 'csc', 'log', 'ln'].some(fn => 
+                        fn[0] === mi.toLowerCase() && node.parentNode.textContent.startsWith(fn)))) {
+                        console.log('PART OF FUNCTION NAME:', mi);
+                        // Might be part of a function name, but let processChildren handle it
+                        return mi;
+                    }
+                    
+                    return mi;
+                
+                case 'mn':
+                    // Handle numbers
+                    const number = getNodeContent(node);
+                    console.log('NUMBER NODE:', number);
+                    return number;
+                
+                case 'mo':
+                    // Handle operators
+                    const op = getNodeContent(node);
+                    console.log('OPERATOR NODE:', op);
+                    switch (op) {
+                        case '=': return '=';
+                        case '+': return '+';
+                        case '-': return '-';
+                        case '×': return '\\times';
+                        case '÷': return '\\div';
+                        case '|': 
+                            // Check for absolute value context
+                            if (isStartOfAbsValue(node)) {
+                                console.log('START OF ABS VALUE');
+                                return '\\left|';
+                            } else if (isEndOfAbsValue(node)) {
+                                console.log('END OF ABS VALUE');
+                                return '\\right|';
+                            }
+                            return '|';
+                        case '(': 
+                            console.log('OPEN PARENTHESIS');
+                            return '\\left(';
+                        case ')': 
+                            console.log('CLOSE PARENTHESIS');
+                            return '\\right)';
+                        case '\'': return '\'';
+                        case '′': return '\'';  // Unicode prime
+                        default: return op;
+                    }
+                
+                case 'mtext':
+                    // Handle text elements
+                    const text = getNodeContent(node);
+                    console.log('TEXT NODE:', text);
+                    if (text === 'π') return '\\pi';
+                    if (text === 'd') return 'd';
+                    return text;
+                
+                case 'msqrt':
+                    // Improved square root handling - directly process the radicand
+                    console.log('SQRT NODE');
+                    return processMsqrt(node);
+                
+                case 'mfrac':
+                    // Handle fractions
+                    console.log('FRACTION NODE');
+                    if (node.children.length >= 2) {
+                        const num = node.children[0];
+                        const den = node.children[1];
+                        const numLatex = convertMathMLToLatex(num);
+                        const denLatex = convertMathMLToLatex(den);
+                        console.log('FRACTION: Num =', numLatex, 'Den =', denLatex);
+                        return '\\frac{' + numLatex + '}{' + denLatex + '}';
+                    }
+                    return processChildren(node);
+                
+                case 'msup':
+                    // Handle superscripts
+                    console.log('SUPERSCRIPT NODE');
+                    if (node.children.length >= 2) {
+                        const base = node.children[0];
+                        const exp = node.children[1];
+                        
+                        // Process the base carefully to avoid double parentheses
+                        let baseText;
+                        if (isParenthesizedExpression(base)) {
+                            // If base already has parentheses, process it specially
+                            baseText = processParenthesizedExpression(base);
+                        } else {
+                            baseText = convertMathMLToLatex(base);
+                        }
+                        
+                        const expText = convertMathMLToLatex(exp);
+                        console.log('SUPERSCRIPT: Base =', baseText, 'Exp =', expText);
+                        
+                        // Check if base needs parentheses
+                        const needsParens = isCompoundElement(base) && !isParenthesizedExpression(base);
+                        
+                        // Special case for squared
+                        if (expText === '2') {
+                            console.log('SQUARED EXPRESSION');
+                            return needsParens ? 
+                                '(' + baseText + ')^2' : 
+                                baseText + '^2';
+                        }
+                        return needsParens ? 
+                            '(' + baseText + ')^{' + expText + '}' : 
+                            baseText + '^{' + expText + '}';
+                    }
+                    return processChildren(node);
+                
+                case 'msub':
+                    // Handle subscripts
+                    console.log('SUBSCRIPT NODE');
+                    if (node.children.length >= 2) {
+                        const baseSub = node.children[0];
+                        const sub = node.children[1];
+                        const baseSubLatex = convertMathMLToLatex(baseSub);
+                        const subLatex = convertMathMLToLatex(sub);
+                        console.log('SUBSCRIPT: Base =', baseSubLatex, 'Sub =', subLatex);
+                        return baseSubLatex + '_{' + subLatex + '}';
+                    }
+                    return processChildren(node);
+                
+                case 'munderover':
+                    // Handle elements with under and over scripts (like integrals)
+                    console.log('UNDEROVER NODE');
+                    if (node.children.length >= 3) {
+                        const baseOp = node.children[0];
+                        const underScript = node.children[1];
+                        const overScript = node.children[2];
+                        
+                        const baseOpContent = getNodeContent(baseOp);
+                        const underLatex = convertMathMLToLatex(underScript);
+                        const overLatex = convertMathMLToLatex(overScript);
+                        
+                        console.log('UNDEROVER: Base =', baseOpContent, 'Under =', underLatex, 'Over =', overLatex);
+                        
+                        // Special case for integral
+                        if (baseOpContent === '∫') {
+                            console.log('INTEGRAL DETECTED');
+                            return '\\int_{' + underLatex + '}^{' + overLatex + '}';
+                        }
+                        
+                        return convertMathMLToLatex(baseOp) + '_{' + underLatex + '}^{' + overLatex + '}';
+                    }
+                    return processChildren(node);
+                
+                case 'mstyle':
+                    console.log('MSTYLE NODE');
+                    return processChildren(node);
+                
+                default:
+                    console.log('DEFAULT CASE FOR NODE TYPE:', nodeType);
+                    return processChildren(node);
+            }
+        }
+
+        function processChildren(node) {
+            console.log('PROCESS CHILDREN:', node.nodeName, node.childNodes?.length || 0, 'children');
+            
+            // Initialize variables at the beginning of the function
+            let result = '';
+            let skipNext = false;
+            
+            // Check for function node with data-semantic-role="prefix function"
+            if (node.getAttribute && node.getAttribute('data-semantic-role') === 'prefix function') {
+                console.log("PREFIX FUNCTION FOUND:", node.textContent);
+                
+                // Find the function name node (typically has data-semantic-type="function")
+                const funcNode = node.querySelector('[data-semantic-type="function"]');
+                if (funcNode) {
+                    const funcName = funcNode.textContent.toLowerCase().trim();
+                    console.log("FUNCTION NAME:", funcName);
+                    
+                    // Get the function argument (usually the next node)
+                    const argNode = Array.from(node.childNodes).find(child => 
+                        child.getAttribute && 
+                        child.getAttribute('data-semantic-type') !== 'function' &&
+                        child.getAttribute('data-semantic-type') !== 'punctuation');
+                    
+                    const arg = argNode ? convertMathMLToLatex(argNode) : 'x';
+                    console.log("FUNCTION ARG:", arg);
+                    
+                    // Map function name to LaTeX
+                    if (funcName === 'cos' || funcName.includes('cos')) return `\\cos ${arg}`;
+                    if (funcName === 'sin' || funcName.includes('sin')) return `\\sin ${arg}`;
+                    if (funcName === 'tan' || funcName.includes('tan')) return `\\tan ${arg}`;
+                    if (funcName === 'cot' || funcName.includes('cot')) return `\\cot ${arg}`;
+                    if (funcName === 'sec' || funcName.includes('sec')) return `\\sec ${arg}`;
+                    if (funcName === 'csc' || funcName.includes('csc')) return `\\csc ${arg}`;
+                    if (funcName === 'log' || funcName.includes('log')) return `\\log ${arg}`;
+                    if (funcName === 'ln' || funcName.includes('ln')) return `\\ln ${arg}`;
+                }
+            }
+            
+            // Regular processing for functions and other math expressions
+            if (node.textContent) {
+                const fullText = node.textContent.trim().toLowerCase();
+                console.log('NODE TEXT:', fullText);
+                
+                // General function pattern detection
+                for (const func of ['cos', 'sin', 'tan', 'cot', 'sec', 'csc', 'log', 'ln']) {
+                    if (isFunctionNode(node, func)) {
+                        console.log('FUNCTION DETECTED IN TEXT:', func);
+                        const arg = getArgumentAfterFunction(node, func);
+                        console.log('FUNCTION ARGUMENT:', arg);
+                        return '\\' + func + ' ' + arg;
+                    }
+                }
+                
+                // Check for specific text patterns
+                if (fullText.includes('cos') && fullText.includes('sin')) {
+                    console.log('COS AND SIN IN SAME NODE');
+                    if (fullText.includes('-') || fullText.includes('−')) {
+                        console.log('LIKELY cos(x)-sin(x) PATTERN');
+                    }
+                }
+            }
+            
+            // Regular processing for children nodes
+            let possibleFunction = '';
+            
+            for (let i = 0; i < node.childNodes.length; i++) {
+                console.log('CHILD NODE', i, 'OF', node.childNodes.length);
+                
+                if (skipNext) {
+                    console.log('SKIPPING NODE', i);
+                    skipNext = false;
+                    continue;
+                }
+                
+                const child = node.childNodes[i];
+                
+                // Try to detect if this is the start of a function name (like 'sin', 'cos', etc.)
+                if (child.nodeType === 1 && 
+                    child.getAttribute && 
+                    child.getAttribute('data-mml-node') === 'mi') {
+                    
+                    // Get the current character/identifier
+                    const currentChar = getNodeContent(child).toLowerCase();
+                    console.log('CHECKING MI NODE:', currentChar);
+                    
+                    // Check if this might be the start of a known function
+                    const functionNames = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln'];
+                    const possibleFunctions = functionNames.filter(fn => fn.startsWith(currentChar));
+                    
+                    if (possibleFunctions.length > 0) {
+                        console.log('POSSIBLE FUNCTIONS:', possibleFunctions);
+                        // Try to construct a function name from consecutive nodes
+                        const functionResult = tryBuildFunctionName(node, i, functionNames);
+                        
+                        if (functionResult.isFunction) {
+                            console.log('BUILT FUNCTION:', functionResult.latex);
+                            result += functionResult.latex;
+                            i += functionResult.skipCount;
+                            console.log('SKIPPING AHEAD', functionResult.skipCount, 'NODES');
+                            continue;
+                        }
+                    }
+                }
+                
+                // Check for prime symbol after an identifier
+                if (i > 0 && 
+                    node.childNodes[i-1].getAttribute && 
+                    node.childNodes[i-1].getAttribute('data-mml-node') === 'mi' &&
+                    child.getAttribute && 
+                    child.getAttribute('data-mml-node') === 'mo' && 
+                    getNodeContent(child) === '′') {
+                    console.log('PRIME SYMBOL DETECTED');
+                    result += "'"; // Add prime symbol to previous element
+                    continue;
+                } 
+                
+                // Skip invisible operators 
+                if (child.getAttribute && 
+                    child.getAttribute('data-mml-node') === 'mo' && 
+                    isInvisibleOperator(child)) {
+                    console.log('SKIPPING INVISIBLE OPERATOR');
+                    continue;
+                }
+                
+                const childResult = convertMathMLToLatex(child);
+                console.log('CHILD RESULT:', childResult);
+                result += childResult;
+            }
+            
+            console.log('PROCESS CHILDREN RESULT:', result);
+            return result;
+        }
+
+        // Update isFunctionNode to be more general
+        function isFunctionNode(node, functionName) {
+            if (!node || !node.textContent) return false;
+            
+            // Direct text content check
+            if (node.textContent.toLowerCase().includes(functionName)) {
+                return true;
+            }
+            
+            // Check for data-semantic-type="function"
+            if (node.getAttribute && node.getAttribute('data-semantic-type') === "function") {
+                return true;
+            }
+            
+            // Check for specific semantic role
+            if (node.getAttribute && node.getAttribute('data-semantic-role') === "prefix function") {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Remove the isSpecificEquation function
+
+        // New function to properly process square roots
+        function processMsqrt(node) {
+            // The radicand is the content under the square root
+            let radicand = '';
+            
+            // Check if there's an explicit mrow inside the msqrt
+            const mrowElement = node.querySelector('[data-mml-node="mrow"]');
+            if (mrowElement) {
+                // Process the mrow directly
+                radicand = convertMathMLToLatex(mrowElement);
+            } else {
+                // Otherwise, process all direct children
+                for (const child of node.children) {
+                    // Skip the square root symbol itself and the rectangle
+                    if (child.tagName.toLowerCase() === 'g' && 
+                        child.getAttribute('data-mml-node') !== 'mo') {
+                        radicand += convertMathMLToLatex(child);
+                    } else if (child.tagName.toLowerCase() !== 'rect' && 
+                               child.tagName.toLowerCase() !== 'mo' &&
+                               !child.querySelector('use[data-c="221A"]')) {
+                        radicand += convertMathMLToLatex(child);
+                    }
+                }
+            }
+            
+            // Clean up any trailing square root text
+            radicand = radicand.replace(/\\sqrt$/, '');
+            radicand = radicand.replace(/\\sqrt\{\}$/, '');
+            radicand = radicand.replace(/\s*\\sqrt\s*/, '');
+            
+            return '\\sqrt{' + radicand + '}';
+        }
+
+        // New function to check if a node represents an invisible operator
+        function isInvisibleOperator(node) {
+            if (!node) return false;
+            
+            // Check if this is an invisible operator (application or times)
+            const useElem = node.querySelector('use');
+            if (useElem) {
+                const dataC = useElem.getAttribute('data-c');
+                return dataC === '2061' || dataC === '2062'; // Function application or invisible times
+            }
+            
+            return false;
+        }
+
+        function getNodeContent(node) {
+            console.log("GET NODE CONTENT:", node.nodeName, node.getAttribute ? node.getAttribute('data-semantic-type') : 'no attr');
+            
+            // Special case for function nodes - handle multi-character functions like 'cos', 'sin'
+            if (node.getAttribute && node.getAttribute('data-semantic-type') === 'function') {
+                console.log("FUNCTION NODE DETECTED:", node.textContent);
+                
+                const nodeText = node.textContent.trim().toLowerCase();
+                // Check known functions
+                if (nodeText.includes('cos') || nodeText === 'cos') return '\\cos';
+                if (nodeText.includes('sin') || nodeText === 'sin') return '\\sin';
+                if (nodeText.includes('tan') || nodeText === 'tan') return '\\tan';
+                if (nodeText.includes('cot') || nodeText === 'cot') return '\\cot';
+                if (nodeText.includes('sec') || nodeText === 'sec') return '\\sec';
+                if (nodeText.includes('csc') || nodeText === 'csc') return '\\csc';
+                if (nodeText.includes('log') || nodeText === 'log') return '\\log';
+                if (nodeText.includes('ln') || nodeText === 'ln') return '\\ln';
+                
+                // If we're here, log the function for debugging
+                console.log("UNHANDLED FUNCTION:", nodeText);
+            }
+            
+            // Check if this is a multi-character function node (with separate USE elements)
+            if (node.nodeName.toLowerCase() === 'g' && node.childNodes.length > 1) {
+                const useNodes = Array.from(node.querySelectorAll('use[data-c]'));
+                
+                if (useNodes.length > 1) {
+                    // Try to find character sequences that form functions
+                    console.log("MULTI-CHARACTER NODE:", useNodes.length, "characters");
+                    
+                    // Extract characters from data-c attributes
+                    const chars = useNodes.map(useNode => {
+                        const codePoint = useNode.getAttribute('data-c');
+                        // Convert hex to char using String.fromCharCode
+                        return String.fromCharCode(parseInt(codePoint, 16));
+                    });
+                    
+                    console.log("EXTRACTED CHARACTERS:", chars.join(''));
+                    
+                    // Check if these characters form a known function
+                    const combinedText = chars.join('').toLowerCase();
+                    if (combinedText === 'cos') return '\\cos';
+                    if (combinedText === 'sin') return '\\sin';
+                    if (combinedText === 'tan') return '\\tan';
+                    if (combinedText === 'cot') return '\\cot';
+                    if (combinedText === 'sec') return '\\sec';
+                    if (combinedText === 'csc') return '\\csc';
+                    if (combinedText === 'log') return '\\log';
+                    if (combinedText === 'ln') return '\\ln';
+                }
+            }
+            
+            // Try to get text content directly
+            if (node.textContent) {
+                const content = node.textContent.trim();
+                // Check for special characters in text
+                if (content === 'π') return '\\pi';
+                if (content === '′') return '\''; // Unicode prime
+                
+                // Check if this is a known function name
+                if (isStandardFunction(content)) {
+                    return '\\' + content;
+                }
+                
+                return content;
+            }
+            
+            // Handle special cases for elements with 'text' tag
+            const textElem = node.querySelector('text');
+            if (textElem) {
+                const content = textElem.textContent.trim();
+                if (content === 'π') return '\\pi';
+                if (content === 'd') return 'd';
+                if (content === '′') return '\''; // Unicode prime
+                return content;
+            }
+            
+            // Handle uses of glyphs by data-c attribute
+            const useElem = node.querySelector('use');
+            if (useElem) {
+                const dataC = useElem.getAttribute('data-c');
+                
+                // Special handling for function names by checking concatenated sequences
+                if (isFunctionNameStart(node)) {
+                    return getFunctionNameFromSequence(node);
+                }
+                
+                // Handle invisible operators specially to avoid showing Unicode points
+                if (dataC === '2061' || dataC === '2062') {
+                    return ''; // Return empty string for invisible operators
+                }
+                
+                // Get the Unicode character mapping using our unicode_to_tex mapping
+                return getUnicodeMapping(dataC);
+            }
+            
+            // Handle special cases for mathematical functions
+            if (node.nodeName.toLowerCase() === 'mi' && node.getAttribute('data-semantic-type') === 'function') {
+                const content = node.textContent.trim().toLowerCase();
+                if (content === 'cos' || content.includes('cos')) {
+                    return '\\cos ';
+                }
+                if (content === 'sin' || content.includes('sin')) {
+                    return '\\sin ';
+                }
+            }
+            
+            return '';
+        }
+
+        function getUnicodeMapping(codePoint) {
+            // Format the codePoint to match the unicode_to_tex format (U+XXXX)
+            const formattedCodePoint = "U+" + codePoint.toUpperCase().padStart(4, '0');
+            
+            // Try to get the mapping from the unicode_to_tex object
+            if (typeof unicode_to_tex !== 'undefined' && unicode_to_tex[formattedCodePoint]) {
+                console.log(`Used Unicode mapping: ${formattedCodePoint} -> ${unicode_to_tex[formattedCodePoint]}`);
+                return unicode_to_tex[formattedCodePoint];
+            }
+            
+            // Fallback mappings for basic cases
+            // Number mappings (0-9)
+            const numbers = {
+                '30': '0', '31': '1', '32': '2', '33': '3', '34': '4',
+                '35': '5', '36': '6', '37': '7', '38': '8', '39': '9'
+            };
+            
+            if (numbers[codePoint]) {
+                return numbers[codePoint];
+            }
+            
+            // Check if it's a plain ASCII uppercase or lowercase letter
+            const codePointInt = parseInt(codePoint, 16);
+            if (codePointInt >= 0x41 && codePointInt <= 0x5A) { // A-Z
+                return String.fromCharCode(codePointInt);
+            }
+            if (codePointInt >= 0x61 && codePointInt <= 0x7A) { // a-z
+                return String.fromCharCode(codePointInt);
+            }
+            
+            // If no mapping was found, log the unknown code point and return a placeholder
+            console.log("Unknown code point:", codePoint);
+            return `[U+${codePoint}]`;
+        }
+
+        // Add a function to identify standard math functions
+        function isStandardFunction(name) {
+            const standardFunctions = [
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
+                'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+                'log', 'ln', 'exp', 'lim', 'max', 'min',
+                'sup', 'inf'
+            ];
+            
+            return standardFunctions.includes(name.toLowerCase());
+        }
+
+        // Helper to detect if a node is the start of a function name
+        function isFunctionNameStart(node) {
+            // Check if this node is part of a recognized function name sequence
+            const parent = node.parentNode;
+            if (!parent) return false;
+            
+            // Try to extract a potential function name
+            const potentialFunction = getTextContent(parent);
+            return isStandardFunction(potentialFunction);
+        }
+
+        // Helper to get function name from a sequence of nodes
+        function getFunctionNameFromSequence(startNode) {
+            // Look for a sequence of characters that form a function name
+            const parent = startNode.parentNode;
+            if (!parent) return '';
+            
+            const textContent = getTextContent(parent);
+            if (isStandardFunction(textContent)) {
+                return '\\' + textContent;
+            }
+            
+            return '';
+        }
+
+        // Helper to get clean text content from a node
+        function getTextContent(node) {
+            if (!node || !node.textContent) return '';
+            return node.textContent.trim();
+        }
+
+        function getUnicodeMapping(codePoint) {
+            // Number mappings (0-9)
+            const numbers = {
+                '30': '0', '31': '1', '32': '2', '33': '3', '34': '4',
+                '35': '5', '36': '6', '37': '7', '38': '8', '39': '9'
+            };
+            
+            // Latin letters - Upper case (A-Z)
+            const upperLatinBase = '1D434'; // Starting code point for A in Math Italic
+            const upperLatinBasePlain = '41'; // ASCII A
+            
+            // Latin letters - Lower case (a-z)
+            const lowerLatinBase = '1D44E'; // Starting code point for a in Math Italic
+            const lowerLatinBasePlain = '61'; // ASCII a
+            
+            // Greek letters
+            const greekLetters = {
+                // Lowercase Greek
+                '3B1': '\\alpha', '3B2': '\\beta', '3B3': '\\gamma', '3B4': '\\delta',
+                '3B5': '\\epsilon', '3B6': '\\zeta', '3B7': '\\eta', '3B8': '\\theta',
+                '3B9': '\\iota', '3BA': '\\kappa', '3BB': '\\lambda', '3BC': '\\mu',
+                '3BD': '\\nu', '3BE': '\\xi', '3BF': 'o', '3C0': '\\pi',
+                '3C1': '\\rho', '3C2': '\\varsigma', '3C3': '\\sigma', '3C4': '\\tau',
+                '3C5': '\\upsilon', '3C6': '\\phi', '3C7': '\\chi', '3C8': '\\psi',
+                '3C9': '\\omega',
+                
+                // Uppercase Greek
+                '391': 'A', '392': 'B', '393': '\\Gamma', '394': '\\Delta',
+                '395': 'E', '396': 'Z', '397': 'H', '398': '\\Theta',
+                '399': 'I', '39A': 'K', '39B': '\\Lambda', '39C': 'M',
+                '39D': 'N', '39E': '\\Xi', '39F': 'O', '3A0': '\\Pi',
+                '3A1': 'P', '3A3': '\\Sigma', '3A4': 'T', '3A5': '\\Upsilon',
+                '3A6': '\\Phi', '3A7': 'X', '3A8': '\\Psi', '3A9': '\\Omega'
+            };
+            
+            // Mathematical symbols and operators
+            const mathSymbols = {
+                // Basic operators
+                '2B': '+', '2D': '-', '2A': '*', '2F': '/', '25': '%',
+                '2212': '-', // Add proper minus sign mapping
+                
+                // Comparison operators
+                '3D': '=', '3C': '<', '3E': '>', '2260': '\\neq', '2264': '\\leq',
+                '2265': '\\geq', '2248': '\\approx', '2261': '\\equiv',
+                
+                // Special operators
+                '00D7': '\\times', '00F7': '\\div', '2218': '\\circ', '2219': '\\bullet',
+                '22C5': '\\cdot', '2229': '\\cap', '222A': '\\cup', '2208': '\\in',
+                '2209': '\\notin', '220B': '\\ni', '2282': '\\subset', '2283': '\\supset',
+                '2284': '\\not\\subset', '2286': '\\subseteq', '2287': '\\supseteq',
+                '2227': '\\wedge', '2228': '\\vee',
+                
+                // Arrows
+                '2190': '\\leftarrow', '2192': '\\rightarrow', '2191': '\\uparrow',
+                '2193': '\\downarrow', '2194': '\\leftrightarrow', '21D0': '\\Leftarrow',
+                '21D2': '\\Rightarrow', '21D4': '\\Leftrightarrow',
+                
+                // Special symbols
+                '221E': '\\infty', '2200': '\\forall', '2203': '\\exists', '2204': '\\nexists',
+                '2205': '\\emptyset', '2211': '\\sum', '220F': '\\prod', '222B': '\\int',
+                '222C': '\\iint', '222D': '\\iiint', '2202': '\\partial', '2207': '\\nabla',
+                '221A': '', // Changed from '\\sqrt' to empty string since we handle msqrt separately
+                '221B': '', '221C': '', // These also should be empty
+                '2308': '\\lceil', '2309': '\\rceil', '230A': '\\lfloor', '230B': '\\rfloor',
+                '27E8': '\\langle', '27E9': '\\rangle', '7C': '|', '2016': '\\|',
+                
+                // Parentheses and brackets
+                '28': '(', '29': ')', '5B': '[', '5D': ']', '7B': '\\{', '7D': '\\}',
+                
+                // Accents and other symbols
+                '2032': '\'', '2033': '\'\'', '2034': '\'\'\'', '2057': '\'\'\'\'',
+                '00B1': '\\pm', '2213': '\\mp',
+                
+                // Function names and invisible operators - explicitly set to empty strings
+                '2061': '', // Invisible function application
+                '2062': ''  // Invisible times operator
+            };
+            
+            // Check if it's a number
+            if (numbers[codePoint]) return numbers[codePoint];
+            
+            // Check if it's an uppercase Latin letter (Math Italic)
+            const upperLatinOffset = parseInt(codePoint, 16) - parseInt(upperLatinBase, 16);
+            if (upperLatinOffset >= 0 && upperLatinOffset < 26) {
+                return String.fromCharCode(65 + upperLatinOffset); // A-Z
+            }
+            
+            // Check if it's a lowercase Latin letter (Math Italic)
+            const lowerLatinOffset = parseInt(codePoint, 16) - parseInt(lowerLatinBase, 16);
+            if (lowerLatinOffset >= 0 && lowerLatinOffset < 26) {
+                return String.fromCharCode(97 + lowerLatinOffset); // a-z
+            }
+            
+            // Check if it's a plain ASCII uppercase letter
+            const plainUpperOffset = parseInt(codePoint, 16) - parseInt(upperLatinBasePlain, 16);
+            if (plainUpperOffset >= 0 && plainUpperOffset < 26) {
+                return String.fromCharCode(65 + plainUpperOffset); // A-Z
+            }
+            
+            // Check if it's a plain ASCII lowercase letter
+            const plainLowerOffset = parseInt(codePoint, 16) - parseInt(lowerLatinBasePlain, 16);
+            if (plainLowerOffset >= 0 && plainLowerOffset < 26) {
+                return String.fromCharCode(97 + plainLowerOffset); // a-z
+            }
+            
+            // Check for Greek letters and other symbols
+            if (greekLetters[codePoint]) return greekLetters[codePoint];
+            if (mathSymbols[codePoint]) return mathSymbols[codePoint];
+            
+            // Special cases for script, fraktur, double-struck, etc.
+            // These are in different Unicode blocks
+            
+            // If we don't have a mapping, return the code point for debugging
+            console.log("Unknown code point:", codePoint);
+            return `[U+${codePoint}]`;
+        }
+
+        function isStartOfAbsValue(node) {
+            // Check if this is the first '|' in a pair
+            const op = getNodeContent(node);
+            if (op !== '|') return false;
+            
+            // Look for parent with mrow and check if it's a fenced structure
+            const parent = findParentWithType(node, 'mrow');
+            if (!parent) return false;
+            
+            const verticalBars = Array.from(parent.querySelectorAll('[data-mml-node="mo"]'))
+                .filter(n => getNodeContent(n) === '|');
+            
+            if (verticalBars.length !== 2) return false;
+            return verticalBars[0] === node;
+        }
+
+        function isEndOfAbsValue(node) {
+            // Check if this is the second '|' in a pair
+            const op = getNodeContent(node);
+            if (op !== '|') return false;
+            
+            // Look for parent with mrow and check if it's a fenced structure
+            const parent = findParentWithType(node, 'mrow');
+            if (!parent) return false;
+            
+            const verticalBars = Array.from(parent.querySelectorAll('[data-mml-node="mo"]'))
+                .filter(n => getNodeContent(n) === '|');
+            
+            if (verticalBars.length !== 2) return false;
+            return verticalBars[1] === node;
+        }
+
+        function findParentWithType(node, type) {
+            let current = node.parentNode;
+            while (current) {
+                if (current.getAttribute && current.getAttribute('data-mml-node') === type) {
+                    return current;
+                }
+                current = current.parentNode;
+            }
+            return null;
+        }
+
+        function isCompoundElement(node) {
+            // Check if node contains multiple operators or elements
+            if (!node) return false;
+            
+            // Check if it's a parenthesized expression
+            if (node.getAttribute && node.getAttribute('data-mml-node') === 'mrow') {
+                const children = Array.from(node.children);
+                // Check if this is a fenced expression with parentheses
+                const hasOpenParen = children.some(c => 
+                    c.getAttribute('data-mml-node') === 'mo' && 
+                    getNodeContent(c) === '(');
+                    
+                const hasCloseParen = children.some(c => 
+                    c.getAttribute('data-mml-node') === 'mo' && 
+                    getNodeContent(c) === ')');
+                    
+                if (hasOpenParen && hasCloseParen) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        function isImplicitFunction(node) {
+            // Check if this mrow represents a function application
+            if (!node || node.getAttribute('data-mml-node') !== 'mrow') return false;
+            
+            const children = Array.from(node.children || []);
+            if (children.length < 2) return false;
+            
+            // Look for 'mi' element followed by either application operator or mrow with parentheses
+            const firstChild = children[0];
+            const isFunctionName = firstChild && 
+                firstChild.getAttribute('data-mml-node') === 'mi';
+            
+            if (!isFunctionName) return false;
+            
+            // Check for application operator or direct parentheses
+            for (let i = 1; i < children.length; i++) {
+                const child = children[i];
+                
+                // Check if it's an application operator (more robust check)
+                if (child.getAttribute && child.getAttribute('data-mml-node') === 'mo' && 
+                    ((child.querySelector && child.querySelector('use[data-c="2061"]')) || 
+                     getNodeContent(child) === '')) {
+                    return true;
+                }
+                
+                // Check if it's a parenthesized argument
+                if (child.getAttribute('data-mml-node') === 'mrow') {
+                    const grandChildren = Array.from(child.children || []);
+                    if (grandChildren.length > 0 && 
+                        grandChildren[0].getAttribute('data-mml-node') === 'mo' && 
+                        getNodeContent(grandChildren[0]) === '(') {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        function processArgumentParentheses(node) {
+            if (!node) return '';
+            
+            // Check if this is already a parenthesized expression
+            const children = Array.from(node.children || []);
+            
+            // Look for opening and closing parentheses at the outermost level
+            const firstChild = children.length > 0 ? children[0] : null;
+            const lastChild = children.length > 0 ? children[children.length - 1] : null;
+            
+            const hasOpeningParen = firstChild && 
+                firstChild.getAttribute('data-mml-node') === 'mo' && 
+                getNodeContent(firstChild) === '(';
+                
+            const hasClosingParen = lastChild && 
+                lastChild.getAttribute('data-mml-node') === 'mo' && 
+                getNodeContent(lastChild) === ')';
+            
+            if (hasOpeningParen && hasClosingParen) {
+                // This is already a parenthesized expression
+                // Process the inner content directly without adding extra parentheses
+                const innerContent = processInnerContent(children.slice(1, -1));
+                return '(' + innerContent + ')';
+            } else {
+                // Not already parenthesized, process normally and add parentheses
+                return '(' + convertMathMLToLatex(node) + ')';
+            }
+        }
+
+        // New function to process inner content of parenthesized expressions
+        function processInnerContent(children) {
+            return children.map(child => convertMathMLToLatex(child)).join('');
+        }
+
+        // New function to detect parenthesized expressions
+        function isParenthesizedExpression(node) {
+            if (!node || node.getAttribute('data-mml-node') !== 'mrow') return false;
+            
+            const children = Array.from(node.children || []);
+            if (children.length < 2) return false;
+            
+            const firstChild = children[0];
+            const lastChild = children[children.length - 1];
+            
+            return firstChild.getAttribute('data-mml-node') === 'mo' && 
+                   getNodeContent(firstChild) === '(' &&
+                   lastChild.getAttribute('data-mml-node') === 'mo' && 
+                   getNodeContent(lastChild) === ')';
+        }
+
+        // New function to process a parenthesized expression without adding redundant parentheses
+        function processParenthesizedExpression(node) {
+            const children = Array.from(node.children || []);
+            // Skip first and last children (the parentheses)
+            const innerContent = processInnerContent(children.slice(1, -1));
+            return '(' + innerContent + ')';
+        }
+
+        // Helper for detecting function name sequences
+        function isFunctionNameSequence(node, startIndex) {
+            if (!node.childNodes || startIndex >= node.childNodes.length - 1) return false;
+            
+            // Try to get the next few nodes' text content
+            let combinedText = '';
+            const maxLength = Math.min(node.childNodes.length, startIndex + 4); // Look ahead up to 4 chars
+            
+            for (let i = startIndex; i < maxLength; i++) {
+                const child = node.childNodes[i];
+                if (child.textContent) {
+                    combinedText += child.textContent.trim();
+                }
+            }
+            
+            return isStandardFunction(combinedText);
+        }
+
+        // Try to build a function name from consecutive nodes
+        function tryBuildFunctionName(node, startIndex, functionNames) {
+            // Default return value if no function is found
+            let result = { isFunction: false, latex: '', skipCount: 0 };
+            
+            // If no node or invalid start index, return default
+            if (!node || !node.childNodes || startIndex >= node.childNodes.length) {
+                return result;
+            }
+            
+            // Try to build a function name by examining consecutive nodes
+            let potentialName = '';
+            let nodeCount = 0;
+            
+            // Look ahead at up to 4 nodes
+            for (let i = 0; i < 4 && (startIndex + i) < node.childNodes.length; i++) {
+                const childNode = node.childNodes[startIndex + i];
+                
+                // Skip non-element nodes or nodes without content
+                if (childNode.nodeType !== 1 || !childNode.textContent) {
+                    continue;
+                }
+                
+                // Get content and append to potential name
+                let content = '';
+                if (childNode.getAttribute && childNode.getAttribute('data-mml-node') === 'mi') {
+                    content = getNodeContent(childNode).toLowerCase();
+                } else if (childNode.textContent) {
+                    content = childNode.textContent.trim().toLowerCase();
+                }
+                
+                if (content) {
+                    potentialName += content;
+                    nodeCount = i + 1; // Count of nodes to skip later
+                    
+                    // Check if we've found a complete function name
+                    if (functionNames.includes(potentialName)) {
+                        console.log("Found function:", potentialName);
+                        return {
+                            isFunction: true,
+                            latex: '\\' + potentialName + ' ',
+                            skipCount: nodeCount - 1 // Skip count should be nodes after the current one
+                        };
+                    }
+                    
+                    // If we've built something that doesn't match any function prefix, break
+                    const stillPossible = functionNames.some(fn => fn.startsWith(potentialName));
+                    if (!stillPossible) {
+                        break;
+                    }
+                }
+            }
+            
+            // Didn't find a matching function
+            return result;
+        }
+        
+        // Extract function name and determine how many nodes to skip
+        function extractFunctionName(node, startIndex) {
+            if (!node.childNodes) return { name: '', skipCount: 0 };
+            
+            const standardFunctions = [
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot',
+                'sinh', 'cosh', 'tanh', 'coth',
+                'log', 'ln', 'exp', 'lim', 'max', 'min'
+            ];
+            
+            let combinedText = '';
+            let skipCount = 0;
+            
+            // Try combinations of increasing length
+            for (let ahead = 0; startIndex + ahead < node.childNodes.length && ahead < 6; ahead++) {
+                const child = node.childNodes[startIndex + ahead];
+                if (child.textContent) {
+                    combinedText += child.textContent.trim();
+                }
+                
+                // If we have a match with a standard function
+                if (standardFunctions.includes(combinedText.toLowerCase())) {
+                    return { name: '\\' + combinedText.toLowerCase() + ' ', skipCount: ahead };
+                }
+            }
+            
+            return { name: '', skipCount: 0 };
+        }
+
+        // Enhanced function to check if a node is part of a standard math function
+        function isStandardFunction(name) {
+            if (!name) return false;
+            
+            // Check standard functions
+            const standardFunctions = [
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
+                'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+                'log', 'ln', 'exp', 'lim', 'max', 'min',
+                'sup', 'inf'
+            ];
+            
+            if (standardFunctions.includes(name.toLowerCase())) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Add special handling for LaTeX function commands
+        function handleSpecialFunctions(content, node) {
+            // If we have a parent node, check if the content fits a pattern 
+            // that suggests it's part of a function name
+            if (node && node.parentNode) {
+                const parentContent = node.parentNode.textContent.trim().toLowerCase();
+                
+                // Check for common function patterns
+                if (parentContent.startsWith('sin') && content === 's') {
+                    console.log("Detected 'sin' function");
+                    return '\\sin ';
+                }
+                if (parentContent.startsWith('cos') && content === 'c') {
+                    console.log("Detected 'cos' function");
+                    return '\\cos ';
+                }
+                if (parentContent.startsWith('tan') && content === 't') {
+                    console.log("Detected 'tan' function");
+                    return '\\tan ';
+                }
+                // And more for other functions...
+            }
+            
+            return content;
+        }
+        
+        // Helper to check if a text might be a function context
+        function isFunctionContext(text) {
+            if (!text) return false;
+            text = text.toLowerCase();
+            
+            const mathFunctions = [
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot', 'log', 'ln'
+            ];
+            
+            return mathFunctions.some(fn => text.includes(fn));
+        }
+
+        // Extract the argument for a function
+        function extractArgument(node, functionName) {
+            if (!node || !node.textContent) return '';
+            
+            // We need to find all content after the function name
+            const nodeText = node.textContent.toLowerCase();
+            const startIndex = nodeText.indexOf(functionName) + functionName.length;
+            
+            // Get remaining text after function name
+            const restOfContent = node.textContent.substring(startIndex).trim();
+            
+            // For simple cases (like just "x"), return directly
+            if (restOfContent.length === 1 && /[a-z]/i.test(restOfContent)) {
+                return restOfContent;
+            }
+            
+            // Try to find identifiers or other content after the function name
+            // This is simplified - more complex arguments would need better parsing
+            const match = restOfContent.match(/^([a-zA-Z0-9]+)/);
+            if (match) {
+                return match[1];
+            }
+            
+            return restOfContent;
+        }
+        
+        // Add example when page loads
+        window.onload = function() {
+            console.log('Page loaded');
+            // Check if the Unicode mapping file was loaded properly
+            if (typeof unicode_to_tex !== 'undefined') {
+                console.log("Unicode mapping file loaded successfully!");
+                console.log(`Total Unicode mappings available: ${Object.keys(unicode_to_tex).length}`);
+            } else {
+                console.error("Unicode mapping file not loaded correctly!");
+            }
+            
+            // Pre-populate the input area with example
+            const exampleInput = `<g data-mml-node="math" xmlns:ns2="http://purl.org/dc/terms/" xmlns:ns3="http://www.sanoma-learning.com/metadata/sl" xmlns:ns4="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:wrs="http://www.wiris.com/xml/mathml-extension" data-semantic-structure="(18 (16 0 15 (10 1 2 3)) 4 (17 (14 5 13 6) 7 (12 8 11 9)))"><g data-mml-node="mrow" data-semantic-type="relseq" data-semantic-role="equality" data-semantic-annotation="depth:1" data-semantic-id="18" data-semantic-children="16,17" data-semantic-content="4" data-semantic-owns="16 4 17" aria-level="0" aria-posinset="1" aria-setsize="1" role="treeitem" aria-owns="16 4 17" data-semantic-speech="<mark name=&quot;0&quot;/> <say-as interpret-as=&quot;character&quot;>f</say-as> <mark name=&quot;10&quot;/> of <mark name=&quot;2&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as> <break time=&quot;250ms&quot;/> <mark name=&quot;4&quot;/> equals <mark name=&quot;5&quot;/> cosine <mark name=&quot;6&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as> <mark name=&quot;7&quot;/> minus <mark name=&quot;8&quot;/> sine <mark name=&quot;9&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠋⠷⠭⠾⠀⠨⠅⠀⠉⠕⠎⠀⠭⠤⠎⠊⠝⠀⠭"><g data-mml-node="mrow" data-semantic-added="true" data-semantic-type="appl" data-semantic-role="simple function" data-semantic-annotation="clearspeak:simple;depth:2" data-semantic-id="16" data-semantic-children="0,10" data-semantic-content="15,0" data-semantic-parent="18" data-semantic-owns="0 15 10" aria-level="1" aria-posinset="1" aria-setsize="3" role="treeitem" aria-owns="0 15 10" data-semantic-speech="<mark name=&quot;0&quot;/> <say-as interpret-as=&quot;character&quot;>f</say-as> <mark name=&quot;10&quot;/> of <mark name=&quot;2&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠋⠷⠭⠾"><g data-mml-node="mi" data-semantic-type="identifier" data-semantic-role="simple function" data-semantic-font="italic" data-semantic-annotation="clearspeak:simple;nemeth:number;depth:3" data-semantic-id="0" data-semantic-parent="16" data-semantic-operator="appl" aria-level="2" aria-posinset="1" aria-setsize="3" role="treeitem" data-semantic-speech="<mark name=&quot;0&quot;/> <say-as interpret-as=&quot;character&quot;>f</say-as>" data-semantic-braille="⠋"><use data-c="1D453" xlink:href="#MJX-1-MM-I-1D453"></use></g><g data-mml-node="mo" data-semantic-type="punctuation" data-semantic-role="application" data-semantic-id="15" data-semantic-parent="16" data-semantic-added="true" data-semantic-operator="appl" aria-level="2" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(552,0)" data-semantic-speech="<mark name=&quot;15&quot;/> of" data-semantic-braille="⠀"><use data-c="2061" xlink:href="#MJX-1-MM-N-2061"></use></g><g data-mml-node="mrow" data-semantic-added="true" data-semantic-type="fenced" data-semantic-role="leftright" data-semantic-annotation="depth:3" data-semantic-id="10" data-semantic-children="2" data-semantic-content="1,3" data-semantic-parent="16" data-semantic-owns="1 2 3" aria-level="2" aria-posinset="3" aria-setsize="3" role="treeitem" aria-owns="1 2 3" transform="translate(552,0)" data-semantic-speech="<mark name=&quot;2&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠷⠭⠾"><g data-mml-node="mo" data-semantic-type="fence" data-semantic-role="open" data-semantic-id="1" data-semantic-parent="10" data-semantic-operator="fenced" aria-level="3" aria-posinset="1" aria-setsize="3" role="treeitem" data-semantic-speech="<mark name=&quot;1&quot;/> open paren" data-semantic-braille="⠷"><use data-c="28" xlink:href="#MJX-1-MM-N-28"></use></g><g data-mml-node="mi" data-semantic-type="identifier" data-semantic-role="latinletter" data-semantic-font="italic" data-semantic-annotation="clearspeak:simple;depth:4" data-semantic-id="2" data-semantic-parent="10" aria-level="3" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(389,0)" data-semantic-speech="<mark name=&quot;2&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠭"><use data-c="1D465" xlink:href="#MJX-1-MM-I-1D465"></use></g><g data-mml-node="mo" data-semantic-type="fence" data-semantic-role="close" data-semantic-id="3" data-semantic-parent="10" data-semantic-operator="fenced" aria-level="3" aria-posinset="3" aria-setsize="3" role="treeitem" transform="translate(961,0)" data-semantic-speech="<mark name=&quot;3&quot;/> close paren" data-semantic-braille="⠾"><use data-c="29" xlink:href="#MJX-1-MM-N-29"></use></g></g></g><g data-mml-node="mo" data-semantic-type="relation" data-semantic-role="equality" data-semantic-id="4" data-semantic-parent="18" data-semantic-operator="relseq,=" aria-level="1" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(2179.8,0)" data-semantic-speech="<mark name=&quot;4&quot;/> equals" data-semantic-braille="⠨⠅"><use data-c="3D" xlink:href="#MJX-1-MM-N-3D"></use></g><g data-mml-node="mrow" data-semantic-added="true" data-semantic-type="infixop" data-semantic-role="subtraction" data-semantic-annotation="depth:2" data-semantic-id="17" data-semantic-children="14,12" data-semantic-content="7" data-semantic-parent="18" data-semantic-owns="14 7 12" aria-level="1" aria-posinset="3" aria-setsize="3" role="treeitem" aria-owns="14 7 12" transform="translate(3235.6,0)" data-semantic-speech="<mark name=&quot;5&quot;/> cosine <mark name=&quot;6&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as> <mark name=&quot;7&quot;/> minus <mark name=&quot;8&quot;/> sine <mark name=&quot;9&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠉⠕⠎⠀⠭⠤⠎⠊⠝⠀⠭"><g data-mml-node="mrow" data-semantic-added="true" data-semantic-type="appl" data-semantic-role="prefix function" data-semantic-annotation="clearspeak:simple;depth:3" data-semantic-id="14" data-semantic-children="5,6" data-semantic-content="13,5" data-semantic-parent="17" data-semantic-owns="5 13 6" aria-level="2" aria-posinset="1" aria-setsize="3" role="treeitem" aria-owns="5 13 6" data-semantic-speech="<mark name=&quot;5&quot;/> cosine <mark name=&quot;6&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠉⠕⠎⠀⠭"><g data-mml-node="mi" data-semantic-type="function" data-semantic-role="prefix function" data-semantic-font="normal" data-semantic-annotation="nemeth:number;depth:4" data-semantic-id="5" data-semantic-parent="14" data-semantic-operator="appl" aria-level="3" aria-posinset="1" aria-setsize="3" role="treeitem" data-semantic-speech="<mark name=&quot;5&quot;/> cosine" data-semantic-braille="⠉⠕⠎"><use data-c="63" xlink:href="#MJX-1-MM-N-63"></use><use data-c="6F" xlink:href="#MJX-1-MM-N-6F" transform="translate(444,0)"></use><use data-c="73" xlink:href="#MJX-1-MM-N-73" transform="translate(944,0)"></use></g><g data-mml-node="mo" data-semantic-type="punctuation" data-semantic-role="application" data-semantic-id="13" data-semantic-parent="14" data-semantic-added="true" data-semantic-operator="appl" aria-level="3" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(1338,0)" data-semantic-speech="<mark name=&quot;13&quot;/> of" data-semantic-braille="⠀"><use data-c="2061" xlink:href="#MJX-1-MM-N-2061"></use></g><g data-mml-node="mi" data-semantic-type="identifier" data-semantic-role="latinletter" data-semantic-font="italic" data-semantic-annotation="clearspeak:simple;nemeth:number;depth:4" data-semantic-id="6" data-semantic-parent="14" aria-level="3" aria-posinset="3" aria-setsize="3" role="treeitem" transform="translate(1504.7,0)" data-semantic-speech="<mark name=&quot;6&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠭"><use data-c="1D465" xlink:href="#MJX-1-MM-I-1D465"></use></g></g><g data-mml-node="mo" data-semantic-type="operator" data-semantic-role="subtraction" data-semantic-id="7" data-semantic-parent="17" data-semantic-operator="infixop,−" aria-level="2" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(2298.9,0)" data-semantic-speech="<mark name=&quot;7&quot;/> minus" data-semantic-braille="⠤"><use data-c="2212" xlink:href="#MJX-1-MM-N-2212"></use></g><g data-mml-node="mrow" data-semantic-added="true" data-semantic-type="appl" data-semantic-role="prefix function" data-semantic-annotation="clearspeak:simple;depth:3" data-semantic-id="12" data-semantic-children="8,9" data-semantic-content="11,8" data-semantic-parent="17" data-semantic-owns="8 11 9" aria-level="2" aria-posinset="3" aria-setsize="3" role="treeitem" aria-owns="8 11 9" transform="translate(3299.1,0)" data-semantic-speech="<mark name=&quot;8&quot;/> sine <mark name=&quot;9&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠎⠊⠝⠀⠭"><g data-mml-node="mi" data-semantic-type="function" data-semantic-role="prefix function" data-semantic-font="normal" data-semantic-annotation="nemeth:number;depth:4" data-semantic-id="8" data-semantic-parent="12" data-semantic-operator="appl" aria-level="3" aria-posinset="1" aria-setsize="3" role="treeitem" data-semantic-speech="<mark name=&quot;8&quot;/> sine" data-semantic-braille="⠎⠊⠝"><use data-c="73" xlink:href="#MJX-1-MM-N-73"></use><use data-c="69" xlink:href="#MJX-1-MM-N-69" transform="translate(394,0)"></use><use data-c="6E" xlink:href="#MJX-1-MM-N-6E" transform="translate(672,0)"></use></g><g data-mml-node="mo" data-semantic-type="punctuation" data-semantic-role="application" data-semantic-id="11" data-semantic-parent="12" data-semantic-added="true" data-semantic-operator="appl" aria-level="3" aria-posinset="2" aria-setsize="3" role="treeitem" transform="translate(1228,0)" data-semantic-speech="<mark name=&quot;11&quot;/> of" data-semantic-braille="⠀"><use data-c="2061" xlink:href="#MJX-1-MM-N-2061"></use></g><g data-mml-node="mi" data-semantic-type="identifier" data-semantic-role="latinletter" data-semantic-font="italic" data-semantic-annotation="clearspeak:simple;nemeth:number;depth:4" data-semantic-id="9" data-semantic-parent="12" aria-level="3" aria-posinset="3" aria-setsize="3" role="treeitem" transform="translate(1394.7,0)" data-semantic-speech="<mark name=&quot;9&quot;/> <say-as interpret-as=&quot;character&quot;>x</say-as>" data-semantic-braille="⠭"><use data-c="1D465" xlink:href="#MJX-1-MM-I-1D465"></use></g></g></g></g></g>`;
+            
+            document.getElementById('mathmlInput').value = exampleInput;
+            
+            // Add debug info about the example
+            console.log('EXAMPLE LOADED');
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = exampleInput;
+            const mathNode = tempDiv.querySelector('[data-mml-node="math"]');
+            
+            if (mathNode) {
+                debugNode(mathNode);
+                console.log('DATA-SEMANTIC-STRUCTURE:', mathNode.getAttribute('data-semantic-structure'));
+            }
+        }
+
+        // Helper function to find a function node within a parent
+        function findFunctionNode(parentNode, functionName) {
+            if (!parentNode || !parentNode.querySelectorAll) return null;
+            
+            // Look for text nodes containing the function name
+            for (let child of parentNode.childNodes) {
+                if (child.textContent && child.textContent.toLowerCase().includes(functionName)) {
+                    return child;
+                }
+            }
+            
+            // Look for the specific structure with individual letters (c, o, s) or (s, i, n)
+            if (functionName === "cos") {
+                const cNodes = parentNode.querySelectorAll('[data-c="63"]');
+                if (cNodes.length > 0) {
+                    // Found a 'c', now check for 'o' and 's' nearby
+                    return parentNode;
+                }
+            }
+            
+            if (functionName === "sin") {
+                const sNodes = parentNode.querySelectorAll('[data-c="73"]');
+                if (sNodes.length > 0) {
+                    // Found an 's', now check for 'i' and 'n' nearby
+                    return parentNode;
+                }
+            }
+            
+            return null;
+        }
+
+        // Also add the isFunctionNode function if it's missing
+        function isFunctionNode(node, functionName) {
+            if (!node || !node.textContent) return false;
+            
+            // Direct text content check
+            if (node.textContent.toLowerCase().includes(functionName)) {
+                return true;
+            }
+            
+            // Check for data-semantic-type="function"
+            if (node.getAttribute && node.getAttribute('data-semantic-type') === "function") {
+                return true;
+            }
+            
+            // Check for specific semantic role
+            if (node.getAttribute && node.getAttribute('data-semantic-role') === "prefix function") {
+                return true;
+            }
+            
+            // Special case for the f(x) in f(x) = cos x - sin x
+            if (node.getAttribute && node.getAttribute('data-semantic-id') === "0" && 
+                functionName === "f") {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Helper function to get argument after a function
+        function getArgumentAfterFunction(node, functionName) {
+            if (!node || !node.textContent) return 'x';  // Default to 'x' if no text content
+            
+            const text = node.textContent.toLowerCase();
+            const startIndex = text.indexOf(functionName) + functionName.length;
+            const remaining = text.substring(startIndex).trim();
+            
+            // If remaining is just x, return it
+            if (remaining === 'x') return 'x';
+            
+            // Try to extract the first variable after the function name
+            const match = remaining.match(/([a-z]|\([^)]*\))/i);
+            if (match) return match[0];
+            
+            return 'x'; // Default
+        }
+
+        // Add a detailed debug function
+        function debugNode(node, prefix = '') {
+            if (!node) {
+                console.log(prefix + 'NULL NODE');
                 return;
             }
             
-            console.log("translateAriaToLatex function is available");
-            window.scriptsLoaded.main = true;
+            const type = node.nodeType;
+            const nodeName = node.nodeName;
+            const mmlType = node.getAttribute ? node.getAttribute('data-mml-node') : null;
+            const semantic = node.getAttribute ? node.getAttribute('data-semantic-id') : null;
+            const text = node.textContent ? node.textContent.substring(0, 30) : '';
             
-            // Add event listeners after ensuring scripts are loaded
-            document.getElementById('translate-button').addEventListener('click', function() {
-                try {
-                    const inputText = document.getElementById('input-text').value;
-                    const outputLatex = translateAriaToLatex(inputText);
-                    document.getElementById('output-latex').textContent = outputLatex;
-                } catch(error) {
-                    console.error("Translation error:", error);
-                    document.getElementById('output-latex').innerHTML = 
-                        `<span style="color: red;">Error during translation: ${error.message}</span>`;
-                }
-            });
+            console.log(prefix + `NODE: type=${type}, name=${nodeName}, mml=${mmlType}, semantic=${semantic}, text="${text}"`);
             
-            document.getElementById('load-example').addEventListener('click', function() {
-                const selector = document.getElementById('example-selector');
-                const selectedValue = selector.value;
-                if (selectedValue) {
-                    document.getElementById('input-text').value = selectedValue;
-                    document.getElementById('translate-button').click();
+            if (node.childNodes && node.childNodes.length > 0) {
+                console.log(prefix + `CHILDREN: ${node.childNodes.length}`);
+                for (let i = 0; i < Math.min(node.childNodes.length, 5); i++) {
+                    debugNode(node.childNodes[i], prefix + '  ');
                 }
-            });
-        });
+                if (node.childNodes.length > 5) {
+                    console.log(prefix + `  ... and ${node.childNodes.length - 5} more`);
+                }
+            }
+        }
     </script>
 </body>
 </html>
