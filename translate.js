@@ -490,25 +490,25 @@ function getNodeContent(node) {
         console.log("UNHANDLED FUNCTION:", nodeText);
     }
     
-    // Check if this is a multi-character function node (with separate USE elements)
+    // Check if this is a multi-character node (with separate USE elements)
     if (node.nodeName.toLowerCase() === 'g' && node.childNodes.length > 1) {
         const useNodes = Array.from(node.querySelectorAll('use[data-c]'));
         
         if (useNodes.length > 1) {
-            // Try to find character sequences that form functions
+            // Process multiple characters in the node
             console.log("MULTI-CHARACTER NODE:", useNodes.length, "characters");
             
-            // Extract characters from data-c attributes
-            const chars = useNodes.map(useNode => {
-                const codePoint = useNode.getAttribute('data-c');
-                // Convert hex to char using String.fromCharCode
-                return String.fromCharCode(parseInt(codePoint, 16));
-            });
+            // Extract all characters from data-c attributes and combine them
+            const fullText = extractAllCharacters(useNodes);
+            console.log("EXTRACTED FULL TEXT:", fullText);
             
-            console.log("EXTRACTED CHARACTERS:", chars.join(''));
+            // Check if it's a number
+            if (/^\d+$/.test(fullText)) {
+                return fullText; // Return the full multi-digit number
+            }
             
             // Check if these characters form a known function
-            const combinedText = chars.join('').toLowerCase();
+            const combinedText = fullText.toLowerCase();
             if (combinedText === 'cos') return '\\cos';
             if (combinedText === 'sin') return '\\sin';
             if (combinedText === 'tan') return '\\tan';
@@ -517,6 +517,8 @@ function getNodeContent(node) {
             if (combinedText === 'csc') return '\\csc';
             if (combinedText === 'log') return '\\log';
             if (combinedText === 'ln') return '\\ln';
+            
+            return fullText;
         }
     }
     
@@ -576,6 +578,47 @@ function getNodeContent(node) {
     }
     
     return '';
+}
+
+/**
+ * Extracts all characters from a set of 'use' nodes and combines them
+ * into a single string, handling common patterns like multi-digit numbers
+ * @param {Array} useNodes - Array of 'use' elements with data-c attributes
+ * @return {string} The combined string of all extracted characters
+ */
+function extractAllCharacters(useNodes) {
+    if (!useNodes || useNodes.length === 0) return '';
+    
+    // Get all the characters and sort them by x position if available
+    const charData = useNodes.map(useNode => {
+        const codePoint = useNode.getAttribute('data-c');
+        const char = String.fromCharCode(parseInt(codePoint, 16));
+        
+        // Try to get X position for proper ordering
+        let x = 0;
+        try {
+            // Find closest element with x attribute
+            let element = useNode;
+            while (element && !element.getAttribute('x')) {
+                element = element.parentElement;
+            }
+            // Parse x position if found
+            if (element && element.getAttribute('x')) {
+                x = parseFloat(element.getAttribute('x'));
+            }
+        } catch (e) {
+            console.log("Error getting position:", e);
+        }
+        
+        return { char, x, codePoint };
+    });
+    
+    // Sort by x position if available to maintain proper order
+    charData.sort((a, b) => a.x - b.x);
+    console.log("SORTED CHARACTERS:", charData.map(c => `${c.char}(${c.codePoint})`).join(','));
+    
+    // Combine all characters
+    return charData.map(c => c.char).join('');
 }
 
 function getUnicodeMapping(codePoint) {
