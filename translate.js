@@ -3,57 +3,77 @@
  * This file contains all functions for converting MathML to LaTeX
  */
 
-// Main conversion function
+// Track recursion to avoid duplicate logs
+let conversionInProgress = false;
+let loggedExpression = false;
 
+// Main conversion function
 function convertMathMLToLatex(node) {
     const nodeType = node.getAttribute ? node.getAttribute('data-mml-node') : 'none';
-    const id = node.getAttribute ? node.getAttribute('data-semantic-id') : 'none';
-    console.log(`CONVERT NODE: type=${nodeType}, id=${id}, text=${node.textContent?.substring(0, 20)}`);
+    
+    // Only log at the top level of recursion
+    const isTopLevel = !conversionInProgress;
+    
+    if (isTopLevel) {
+        conversionInProgress = true;
+        loggedExpression = false;
+        
+        // Try to get the aria-label from closest MathJax container
+        try {
+            const mjxContainer = node.closest('mjx-container');
+            if (mjxContainer && mjxContainer.getAttribute('aria-label') && !loggedExpression) {
+                const ariaLabel = mjxContainer.getAttribute('aria-label');
+                console.log('[INPUT] Math expression: "' + ariaLabel + '"');
+                loggedExpression = true;
+            }
+        } catch(e) {
+            // Ignore errors in accessing aria-label
+        }
+        
+        console.log('[INFO] Translating...');
+    }
     
     // Remove all special case handling - we'll use a general approach
     if (!node) {
-        console.log('NULL NODE');
+        if (isTopLevel) conversionInProgress = false;
         return '';
     }
     
     // Skip certain nodes
     if (node.nodeType !== 1) { // Not an element node
-        console.log(`TEXT NODE: "${node.textContent?.trim()}"`);
+        if (isTopLevel) conversionInProgress = false;
         return node.nodeType === 3 ? node.textContent.trim() : '';
     }
     
     // Skip non-content elements
     if (node.tagName.toLowerCase() === 'use' || 
         node.tagName.toLowerCase() === 'rect') {
-        console.log(`SKIP NODE: ${node.tagName}`);
+        if (isTopLevel) conversionInProgress = false;
         return '';
     }
     
-    // Get node type
-    console.log(`PROCESSING NODE: ${nodeType || 'unknown'}`);
-    
     // Handle based on node type
     if (!nodeType) {
-        console.log('NO NODE TYPE - PROCESSING CHILDREN');
-        return processChildren(node);
+        const result = processChildren(node);
+        if (isTopLevel) conversionInProgress = false;
+        return result;
     }
+    
+    let result = '';
     
     switch (nodeType) {
         case 'math':
-            console.log('MATH NODE');
             // First check for data-semantic attributes
-            const semanticStructure = node.getAttribute('data-semantic-structure');
-            if (semanticStructure) {
-                console.log('SEMANTIC STRUCTURE:', semanticStructure);
+            result = processChildren(node);
+            if (isTopLevel) {
+                console.log('[INFO] MathJax to LaTeX conversion completed successfully');
+                conversionInProgress = false;
             }
-            
-            return processChildren(node);
+            return result;
         
         case 'mrow':
-            console.log('MROW NODE');
             // For equation patterns (like function applications), we need to handle them properly
             if (node.getAttribute && node.getAttribute('data-semantic-role') === "equality") {
-                console.log('EQUALITY NODE FOUND');
                 // This is an equation with equals sign
                 const children = Array.from(node.children || []);
                 
@@ -63,7 +83,6 @@ function convertMathMLToLatex(node) {
                     if (children[i].getAttribute('data-mml-node') === 'mo' && 
                         getNodeContent(children[i]) === '=') {
                         equalsIndex = i;
-                        console.log('EQUALS SIGN FOUND AT INDEX', i);
                         break;
                     }
                 }
@@ -71,45 +90,42 @@ function convertMathMLToLatex(node) {
                 if (equalsIndex > 0) {
                     const leftSide = children.slice(0, equalsIndex);
                     const rightSide = children.slice(equalsIndex + 1);
-                    console.log('LEFT SIDE NODES:', leftSide.length);
-                    console.log('RIGHT SIDE NODES:', rightSide.length);
                     
                     const leftLatex = leftSide.map(child => convertMathMLToLatex(child)).join('');
                     const rightLatex = rightSide.map(child => convertMathMLToLatex(child)).join('');
                     
-                    console.log('LEFT LATEX:', leftLatex);
-                    console.log('RIGHT LATEX:', rightLatex);
+                    // Only log at the top level to avoid duplicate logs
+                    if (isTopLevel) {
+                        console.log('[PROGRESS] Processed equation with left and right sides');
+                    }
                     
+                    if (isTopLevel) conversionInProgress = false;
                     return leftLatex + '=' + rightLatex;
                 }
             }
 
             // Check if this mrow represents a function application
             if (isImplicitFunction(node)) {
-                console.log('IMPLICIT FUNCTION DETECTED');
                 const func = node.querySelector('[data-mml-node="mi"]');
                 const arg = node.querySelector('[data-mml-node="mrow"]');
-                
-                console.log('FUNCTION NODE:', func?.textContent);
-                console.log('ARGUMENT NODE:', arg?.textContent);
                 
                 if (func && arg) {
                     // Process the argument properly to avoid double parentheses
                     const processedArg = processArgumentParentheses(arg);
-                    const result = convertMathMLToLatex(func) + processedArg;
-                    console.log('FUNCTION RESULT:', result);
+                    result = convertMathMLToLatex(func) + processedArg;
+                    if (isTopLevel) conversionInProgress = false;
                     return result;
                 }
             }
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         case 'mi':
-            console.log('MI NODE:', node.textContent);
             // Handle identifiers
             const mi = getNodeContent(node);
             // Check if this is a standard math function
             if (isStandardFunction(mi)) {
-                console.log('STANDARD FUNCTION:', mi);
                 return '\\' + mi;
             }
             
@@ -117,8 +133,6 @@ function convertMathMLToLatex(node) {
             if (node.parentNode && 
                 (['cos', 'sin', 'tan', 'cot', 'sec', 'csc', 'log', 'ln'].some(fn => 
                 fn[0] === mi.toLowerCase() && node.parentNode.textContent.startsWith(fn)))) {
-                console.log('PART OF FUNCTION NAME:', mi);
-                // Might be part of a function name, but let processChildren handle it
                 return mi;
             }
             
@@ -127,13 +141,11 @@ function convertMathMLToLatex(node) {
         case 'mn':
             // Handle numbers
             const number = getNodeContent(node);
-            console.log('NUMBER NODE:', number);
             return number;
         
         case 'mo':
             // Handle operators
             const op = getNodeContent(node);
-            console.log('OPERATOR NODE:', op);
             switch (op) {
                 case '=': return '=';
                 case '+': return '+';
@@ -143,18 +155,14 @@ function convertMathMLToLatex(node) {
                 case '|': 
                     // Check for absolute value context
                     if (isStartOfAbsValue(node)) {
-                        console.log('START OF ABS VALUE');
                         return '\\left|';
                     } else if (isEndOfAbsValue(node)) {
-                        console.log('END OF ABS VALUE');
                         return '\\right|';
                     }
                     return '|';
                 case '(': 
-                    console.log('OPEN PARENTHESIS');
                     return '\\left(';
                 case ')': 
-                    console.log('CLOSE PARENTHESIS');
                     return '\\right)';
                 case '\'': return '\'';
                 case '′': return '\'';  // Unicode prime
@@ -164,32 +172,36 @@ function convertMathMLToLatex(node) {
         case 'mtext':
             // Handle text elements
             const text = getNodeContent(node);
-            console.log('TEXT NODE:', text);
             if (text === 'π') return '\\pi';
             if (text === 'd') return 'd';
             return text;
         
         case 'msqrt':
             // Improved square root handling - directly process the radicand
-            console.log('SQRT NODE');
             return processMsqrt(node);
         
         case 'mfrac':
             // Handle fractions
-            console.log('FRACTION NODE');
             if (node.children.length >= 2) {
                 const num = node.children[0];
                 const den = node.children[1];
                 const numLatex = convertMathMLToLatex(num);
                 const denLatex = convertMathMLToLatex(den);
-                console.log('FRACTION: Num =', numLatex, 'Den =', denLatex);
+                
+                // Only log at the top level to avoid duplicate logs
+                if (isTopLevel) {
+                    console.log('[PROGRESS] Processed fraction');
+                }
+                
+                if (isTopLevel) conversionInProgress = false;
                 return '\\frac{' + numLatex + '}{' + denLatex + '}';
             }
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         case 'msup':
             // Handle superscripts
-            console.log('SUPERSCRIPT NODE');
             if (node.children.length >= 2) {
                 const base = node.children[0];
                 const exp = node.children[1];
@@ -204,14 +216,12 @@ function convertMathMLToLatex(node) {
                 }
                 
                 const expText = convertMathMLToLatex(exp);
-                console.log('SUPERSCRIPT: Base =', baseText, 'Exp =', expText);
                 
                 // Check if base needs parentheses
                 const needsParens = isCompoundElement(base) && !isParenthesizedExpression(base);
                 
                 // Special case for squared
                 if (expText === '2') {
-                    console.log('SQUARED EXPRESSION');
                     return needsParens ? 
                         '(' + baseText + ')^2' : 
                         baseText + '^2';
@@ -220,24 +230,25 @@ function convertMathMLToLatex(node) {
                     '(' + baseText + ')^{' + expText + '}' : 
                     baseText + '^{' + expText + '}';
             }
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         case 'msub':
             // Handle subscripts
-            console.log('SUBSCRIPT NODE');
             if (node.children.length >= 2) {
                 const baseSub = node.children[0];
                 const sub = node.children[1];
                 const baseSubLatex = convertMathMLToLatex(baseSub);
                 const subLatex = convertMathMLToLatex(sub);
-                console.log('SUBSCRIPT: Base =', baseSubLatex, 'Sub =', subLatex);
                 return baseSubLatex + '_{' + subLatex + '}';
             }
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         case 'munderover':
             // Handle elements with under and over scripts (like integrals)
-            console.log('UNDEROVER NODE');
             if (node.children.length >= 3) {
                 const baseOp = node.children[0];
                 const underScript = node.children[1];
@@ -247,44 +258,44 @@ function convertMathMLToLatex(node) {
                 const underLatex = convertMathMLToLatex(underScript);
                 const overLatex = convertMathMLToLatex(overScript);
                 
-                console.log('UNDEROVER: Base =', baseOpContent, 'Under =', underLatex, 'Over =', overLatex);
-                
                 // Special case for integral
                 if (baseOpContent === '∫') {
-                    console.log('INTEGRAL DETECTED');
+                    // Only log at the top level to avoid duplicate logs
+                    if (isTopLevel) {
+                        console.log('[PROGRESS] Processed integral');
+                    }
                     return '\\int_{' + underLatex + '}^{' + overLatex + '}';
                 }
                 
                 return convertMathMLToLatex(baseOp) + '_{' + underLatex + '}^{' + overLatex + '}';
             }
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         case 'mstyle':
-            console.log('MSTYLE NODE');
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
         
         default:
-            console.log('DEFAULT CASE FOR NODE TYPE:', nodeType);
-            return processChildren(node);
+            result = processChildren(node);
+            if (isTopLevel) conversionInProgress = false;
+            return result;
     }
 }
 
 function processChildren(node) {
-    console.log('PROCESS CHILDREN:', node.nodeName, node.childNodes?.length || 0, 'children');
-    
     // Initialize variables at the beginning of the function
     let result = '';
     let skipNext = false;
     
     // Check for function node with data-semantic-role="prefix function"
     if (node.getAttribute && node.getAttribute('data-semantic-role') === 'prefix function') {
-        console.log("PREFIX FUNCTION FOUND:", node.textContent);
-        
         // Find the function name node (typically has data-semantic-type="function")
         const funcNode = node.querySelector('[data-semantic-type="function"]');
         if (funcNode) {
             const funcName = funcNode.textContent.toLowerCase().trim();
-            console.log("FUNCTION NAME:", funcName);
             
             // Get the function argument (usually the next node)
             const argNode = Array.from(node.childNodes).find(child => 
@@ -293,7 +304,6 @@ function processChildren(node) {
                 child.getAttribute('data-semantic-type') !== 'punctuation');
             
             const arg = argNode ? convertMathMLToLatex(argNode) : 'x';
-            console.log("FUNCTION ARG:", arg);
             
             // Map function name to LaTeX
             if (funcName === 'cos' || funcName.includes('cos')) return `\\cos ${arg}`;
@@ -310,23 +320,12 @@ function processChildren(node) {
     // Regular processing for functions and other math expressions
     if (node.textContent) {
         const fullText = node.textContent.trim().toLowerCase();
-        console.log('NODE TEXT:', fullText);
         
         // General function pattern detection
         for (const func of ['cos', 'sin', 'tan', 'cot', 'sec', 'csc', 'log', 'ln']) {
             if (isFunctionNode(node, func)) {
-                console.log('FUNCTION DETECTED IN TEXT:', func);
                 const arg = getArgumentAfterFunction(node, func);
-                console.log('FUNCTION ARGUMENT:', arg);
                 return '\\' + func + ' ' + arg;
-            }
-        }
-        
-        // Check for specific text patterns
-        if (fullText.includes('cos') && fullText.includes('sin')) {
-            console.log('COS AND SIN IN SAME NODE');
-            if (fullText.includes('-') || fullText.includes('−')) {
-                console.log('LIKELY cos(x)-sin(x) PATTERN');
             }
         }
     }
@@ -335,10 +334,7 @@ function processChildren(node) {
     let possibleFunction = '';
     
     for (let i = 0; i < node.childNodes.length; i++) {
-        console.log('CHILD NODE', i, 'OF', node.childNodes.length);
-        
         if (skipNext) {
-            console.log('SKIPPING NODE', i);
             skipNext = false;
             continue;
         }
@@ -352,22 +348,18 @@ function processChildren(node) {
             
             // Get the current character/identifier
             const currentChar = getNodeContent(child).toLowerCase();
-            console.log('CHECKING MI NODE:', currentChar);
             
             // Check if this might be the start of a known function
             const functionNames = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln'];
             const possibleFunctions = functionNames.filter(fn => fn.startsWith(currentChar));
             
             if (possibleFunctions.length > 0) {
-                console.log('POSSIBLE FUNCTIONS:', possibleFunctions);
                 // Try to construct a function name from consecutive nodes
                 const functionResult = tryBuildFunctionName(node, i, functionNames);
                 
                 if (functionResult.isFunction) {
-                    console.log('BUILT FUNCTION:', functionResult.latex);
                     result += functionResult.latex;
                     i += functionResult.skipCount;
-                    console.log('SKIPPING AHEAD', functionResult.skipCount, 'NODES');
                     continue;
                 }
             }
@@ -380,7 +372,6 @@ function processChildren(node) {
             child.getAttribute && 
             child.getAttribute('data-mml-node') === 'mo' && 
             getNodeContent(child) === '′') {
-            console.log('PRIME SYMBOL DETECTED');
             result += "'"; // Add prime symbol to previous element
             continue;
         } 
@@ -389,16 +380,13 @@ function processChildren(node) {
         if (child.getAttribute && 
             child.getAttribute('data-mml-node') === 'mo' && 
             isInvisibleOperator(child)) {
-            console.log('SKIPPING INVISIBLE OPERATOR');
             continue;
         }
         
         const childResult = convertMathMLToLatex(child);
-        console.log('CHILD RESULT:', childResult);
         result += childResult;
     }
     
-    console.log('PROCESS CHILDREN RESULT:', result);
     return result;
 }
 
@@ -452,6 +440,11 @@ function processMsqrt(node) {
     radicand = radicand.replace(/\\sqrt\{\}$/, '');
     radicand = radicand.replace(/\s*\\sqrt\s*/, '');
     
+    // Only log at the top level to avoid duplicate logs
+    if (!conversionInProgress) {
+        console.log('[PROGRESS] Processed square root');
+    }
+    
     return '\\sqrt{' + radicand + '}';
 }
 
@@ -469,12 +462,8 @@ function isInvisibleOperator(node) {
 }
 
 function getNodeContent(node) {
-    console.log("GET NODE CONTENT:", node.nodeName, node.getAttribute ? node.getAttribute('data-semantic-type') : 'no attr');
-    
     // Special case for function nodes - handle multi-character functions like 'cos', 'sin'
     if (node.getAttribute && node.getAttribute('data-semantic-type') === 'function') {
-        console.log("FUNCTION NODE DETECTED:", node.textContent);
-        
         const nodeText = node.textContent.trim().toLowerCase();
         // Check known functions
         if (nodeText.includes('cos') || nodeText === 'cos') return '\\cos';
@@ -485,9 +474,6 @@ function getNodeContent(node) {
         if (nodeText.includes('csc') || nodeText === 'csc') return '\\csc';
         if (nodeText.includes('log') || nodeText === 'log') return '\\log';
         if (nodeText.includes('ln') || nodeText === 'ln') return '\\ln';
-        
-        // If we're here, log the function for debugging
-        console.log("UNHANDLED FUNCTION:", nodeText);
     }
     
     // Check if this is a multi-character node (with separate USE elements)
@@ -495,12 +481,8 @@ function getNodeContent(node) {
         const useNodes = Array.from(node.querySelectorAll('use[data-c]'));
         
         if (useNodes.length > 1) {
-            // Process multiple characters in the node
-            console.log("MULTI-CHARACTER NODE:", useNodes.length, "characters");
-            
             // Extract all characters from data-c attributes and combine them
             const fullText = extractAllCharacters(useNodes);
-            console.log("EXTRACTED FULL TEXT:", fullText);
             
             // Check if it's a number
             if (/^\d+$/.test(fullText)) {
@@ -607,7 +589,7 @@ function extractAllCharacters(useNodes) {
                 x = parseFloat(element.getAttribute('x'));
             }
         } catch (e) {
-            console.log("Error getting position:", e);
+            console.log('[WARNING] Error getting element position');
         }
         
         return { char, x, codePoint };
@@ -615,7 +597,6 @@ function extractAllCharacters(useNodes) {
     
     // Sort by x position if available to maintain proper order
     charData.sort((a, b) => a.x - b.x);
-    console.log("SORTED CHARACTERS:", charData.map(c => `${c.char}(${c.codePoint})`).join(','));
     
     // Combine all characters
     return charData.map(c => c.char).join('');
@@ -627,7 +608,6 @@ function getUnicodeMapping(codePoint) {
     
     // Try to get the mapping from the unicode_to_tex object
     if (typeof unicode_to_tex !== 'undefined' && unicode_to_tex[formattedCodePoint]) {
-        console.log(`Used Unicode mapping: ${formattedCodePoint} -> ${unicode_to_tex[formattedCodePoint]}`);
         return unicode_to_tex[formattedCodePoint];
     }
     
@@ -652,7 +632,7 @@ function getUnicodeMapping(codePoint) {
     }
     
     // If no mapping was found, log the unknown code point and return a placeholder
-    console.log("Unknown code point:", codePoint);
+    console.log('[WARNING] Unknown Unicode character detected');
     return `[U+${codePoint}]`;
 }
 
@@ -910,7 +890,6 @@ function tryBuildFunctionName(node, startIndex, functionNames) {
             
             // Check if we've found a complete function name
             if (functionNames.includes(potentialName)) {
-                console.log("Found function:", potentialName);
                 return {
                     isFunction: true,
                     latex: '\\' + potentialName + ' ',
@@ -967,15 +946,12 @@ function handleSpecialFunctions(content, node) {
         
         // Check for common function patterns
         if (parentContent.startsWith('sin') && content === 's') {
-            console.log("Detected 'sin' function");
             return '\\sin ';
         }
         if (parentContent.startsWith('cos') && content === 'c') {
-            console.log("Detected 'cos' function");
             return '\\cos ';
         }
         if (parentContent.startsWith('tan') && content === 't') {
-            console.log("Detected 'tan' function");
             return '\\tan ';
         }
         // And more for other functions...
@@ -1070,27 +1046,15 @@ function getArgumentAfterFunction(node, functionName) {
 
 function debugNode(node, prefix = '') {
     if (!node) {
-        console.log(prefix + 'NULL NODE');
         return;
     }
     
     const type = node.nodeType;
     const nodeName = node.nodeName;
     const mmlType = node.getAttribute ? node.getAttribute('data-mml-node') : null;
-    const semantic = node.getAttribute ? node.getAttribute('data-semantic-id') : null;
     const text = node.textContent ? node.textContent.substring(0, 30) : '';
     
-    console.log(prefix + `NODE: type=${type}, name=${nodeName}, mml=${mmlType}, semantic=${semantic}, text="${text}"`);
-    
-    if (node.childNodes && node.childNodes.length > 0) {
-        console.log(prefix + `CHILDREN: ${node.childNodes.length}`);
-        for (let i = 0; i < Math.min(node.childNodes.length, 5); i++) {
-            debugNode(node.childNodes[i], prefix + '  ');
-        }
-        if (node.childNodes.length > 5) {
-            console.log(prefix + `  ... and ${node.childNodes.length - 5} more`);
-        }
-    }
+    console.log('[DEBUG] ' + prefix + `Node: ${mmlType || nodeName}, text="${text}"`);
 }
 
 // Export the functions that need to be called from the HTML file
