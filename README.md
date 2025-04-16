@@ -1,18 +1,18 @@
 # MathJaxToLaTeX Converter
 
-A Chrome extension that converts MathML (as used by MathJax) to LaTeX code. This utility helps when you need to extract mathematical expressions from web pages or other sources that use MathML for rendering.
+A Chrome extension that converts MathJax/MathML expressions to LaTeX code. This utility helps when you need to extract mathematical expressions from web pages for use in LaTeX documents or other systems that require LaTeX formatting.
 
 ## Features
 
-- Converts MathJax/MathML markup to LaTeX notation
-- Single-click copying of LaTeX code directly from web pages
-- Works as a browser extension for seamless integration with your workflow
+- Automatically detects MathJax/MathML elements on web pages
+- Single-click copying of LaTeX code with visual feedback
 - Handles various mathematical expressions including:
   - Basic operations (+, -, ×, ÷)
   - Greek letters
   - Mathematical functions (sin, cos, etc.)
-  - Fractions, roots, and other advanced notation
+  - Fractions, roots, and other notation
   - Special symbols and operators
+- Special support for kampus.sanomapro.fi with menu panel blocking and text selection handling
 
 ## Installation
 
@@ -24,52 +24,30 @@ A Chrome extension that converts MathML (as used by MathJax) to LaTeX code. This
 
 ## How to Use
 
-### As a Chrome Extension
 1. Navigate to any web page containing MathJax/MathML equations
-2. Click on any equation to instantly convert it to LaTeX
-3. The LaTeX code is automatically copied to your clipboard
-4. Paste the LaTeX code wherever you need it (documents, calculators, etc.)
+2. Click on any equation rendered by MathJax
+3. The LaTeX code will be automatically copied to your clipboard
+4. A "Copied!" notification will briefly appear to confirm successful copying
+5. Paste the LaTeX code wherever you need it (LaTeX documents, calculators, etc.)
 
-### Standalone Mode
-1. Open `index.html` in your web browser
-2. Copy MathML content (typically found in the DOM of pages using MathJax)
-3. Paste the MathML into the input area
-4. Click "Convert to LaTeX"
-5. Get your LaTeX code from the output area
-
-## Example
-
-The tool comes with a preloaded example. When you open the page, you'll see a complex MathML expression that will be converted to:
-
-```latex
-f(x) = \cos x - \sin x
-```
 
 ## Project Structure
 
-- `index.html` - The main interface for the converter
 - `translate.js` - Core functions for converting MathML to LaTeX
-- `fileunicode.js` - Unicode to LaTeX mappings for various mathematical symbols
-- `content.js` - Chrome extension functionality for in-page conversion and single-click copying
-
-## Requirements
-
-No external libraries required! This tool runs entirely in your browser with vanilla JavaScript.
+- `content.js` - Chrome extension functionality for in-page conversion and click handling
+- `popup.js` - Simple popup script for the extension
+- Additional files may include Unicode to LaTeX mappings for various mathematical symbols
 
 ## Development
 
 If you want to extend the tool:
-
-- Add more Unicode-to-LaTeX mappings in `fileunicode.js`
 - Modify conversion logic in `translate.js`
-- Enhance the UI in `popup.html`
-- Extend browser integration in `content.js`
-
-## License
-
-Feel free to use, modify, and distribute this tool according to your needs. Credit to the original author is appreciated.
+- Enhance browser integration in `content.js`
+- Add support for additional math notation types
 
 ## Limitations
 
-- Some complex or specialized mathematical notations might require manual adjustment after conversion
-- The tool expects properly formatted MathML input
+- Only works on pages that use MathJax for rendering math expressions
+- Some complex mathematical notations may not convert perfectly
+- Works best with MathJax v3+ generated content
+- Special functionality for kampus.sanomapro.fi may interfere with other site features
