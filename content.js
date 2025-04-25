@@ -68,9 +68,12 @@ function convertToLatex(mathmlInput) {
  * Sets up overlay functionality for MathJax elements
  */
 function setupMathJaxOverlay() {
-  const mathJaxElements = document.querySelectorAll('mjx-container.MathJax');
+  // Find both standard MathJax containers and g elements with data-mml-node="math"
+  const mathJaxContainers = document.querySelectorAll('mjx-container.MathJax');
+  const mathGElements = document.querySelectorAll('g[data-mml-node="math"]');
   
-  mathJaxElements.forEach(element => {
+  // Process standard MathJax containers
+  mathJaxContainers.forEach(element => {
     element.classList.add('mathjax-copyable');
     
     element.addEventListener('click', function(event) {
@@ -80,6 +83,89 @@ function setupMathJaxOverlay() {
         console.log('[INFO] Clicked math expression: "' + ariaLabel + '"');
       }
       
+      // Check if this is CHTML or SVG format
+      const jaxType = element.getAttribute('jax') || '';
+      
+      if (jaxType.toUpperCase() === 'CHTML') {
+        // Handle CHTML format
+        console.log('[INFO] Processing CHTML format MathJax');
+        
+        // Option 1: If assistive MathML is available, we can use it directly
+        const assistiveMML = element.querySelector('mjx-assistive-mml math');
+        if (assistiveMML) {
+          console.log('[INFO] Using assistive MathML for conversion');
+          
+          // Log the assistive MathML structure to help debug
+          console.log('[DEBUG] Assistive MathML:', assistiveMML.outerHTML);
+          
+          try {
+            // Use the specialized assistive MathML processor directly here
+            const latexContent = convertMathMLFromAssistiveMML(assistiveMML);
+            console.log('[DEBUG] Generated LaTeX:', latexContent);
+            
+            navigator.clipboard.writeText(latexContent)
+              .then(() => {
+                showCopiedFeedback(element);
+                console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
+              })
+              .catch(err => {
+                console.error('[ERROR] Failed to copy LaTeX: ', err);
+              });
+          } catch (error) {
+            console.error('[ERROR] Error converting assistive MathML:', error);
+            
+            // Fallback: try direct MathML from assistive-mml
+            try {
+              const mathML = assistiveMML.outerHTML;
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = mathML;
+              
+              // Try fallback direct processing
+              const latexContent = processAssistiveMathML(tempDiv.querySelector('math'));
+              console.log('[DEBUG] Fallback LaTeX:', latexContent);
+              
+              navigator.clipboard.writeText(latexContent)
+                .then(() => {
+                  showCopiedFeedback(element);
+                  console.log('[SUCCESS] Copied to clipboard (fallback): ' + latexContent);
+                })
+                .catch(err => {
+                  console.error('[ERROR] Failed to copy LaTeX (fallback): ', err);
+                });
+            } catch (fallbackError) {
+              console.error('[ERROR] Fallback conversion also failed:', fallbackError);
+              // Final fallback: use the aria-label attribute
+              copyAriaLabelAsText(element);
+            }
+          }
+          
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        
+        // Option 2: Use the CHTML structure directly
+        const mathElement = element.querySelector('mjx-math');
+        if (mathElement) {
+          console.log('[INFO] Using CHTML structure for conversion');
+          const latexContent = convertMathMLToLatex(element);
+          
+          navigator.clipboard.writeText(latexContent)
+            .then(() => {
+              showCopiedFeedback(element);
+              console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
+            })
+            .catch(err => {
+              console.error('[ERROR] Failed to copy LaTeX: ', err);
+            });
+          
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      
+      // Original SVG handling
       const mathElements = element.querySelectorAll('g[data-mml-node="math"]');
       
       if (mathElements.length > 0) {
@@ -117,6 +203,125 @@ function setupMathJaxOverlay() {
       event.stopPropagation();
     });
   });
+  
+  // Process g elements with data-mml-node="math"
+  mathGElements.forEach(element => {
+    // Skip if already inside a processed mjx-container
+    if (element.closest('mjx-container.mathjax-copyable')) {
+      return;
+    }
+    
+    // Find closest parent that can be made clickable (SVG or containing div)
+    const clickableParent = element.closest('svg') || element.parentElement;
+    if (!clickableParent) return;
+    
+    clickableParent.classList.add('mathjax-copyable');
+    
+    clickableParent.addEventListener('click', function(event) {
+      // Use the math element directly
+      const htmlContent = element.outerHTML;
+      
+      if (htmlContent) {
+        const latexContent = convertToLatex(htmlContent);
+        navigator.clipboard.writeText(latexContent)
+          .then(() => {
+            showCopiedFeedback(clickableParent);
+            console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
+          })
+          .catch(err => {
+            console.error('[ERROR] Failed to copy HTML: ', err);
+          });
+      }
+      
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  });
+}
+
+/**
+ * Direct assistive MathML parsing as fallback
+ */
+function processAssistiveMathML(mathNode) {
+  if (!mathNode) return 'No math node found';
+  
+  // Process direct MathML - simpler approach focused on key structures
+  function processMathNode(node) {
+    if (!node) return '';
+    
+    if (node.nodeType === 3) { // Text node
+      return node.textContent.trim();
+    }
+    
+    const nodeName = node.nodeName.toLowerCase();
+    
+    // Handle different MathML elements
+    switch (nodeName) {
+      case 'mfrac':
+        const numNode = node.firstElementChild;
+        const denNode = node.lastElementChild;
+        if (numNode && denNode) {
+          return '\\frac{' + processMathNode(numNode) + '}{' + processMathNode(denNode) + '}';
+        }
+        break;
+        
+      case 'msqrt':
+        let sqrtContent = '';
+        for (const child of node.childNodes) {
+          sqrtContent += processMathNode(child);
+        }
+        return '\\sqrt{' + sqrtContent + '}';
+        
+      case 'msup':
+        const baseNode = node.firstElementChild;
+        const supNode = node.lastElementChild;
+        if (baseNode && supNode) {
+          const base = processMathNode(baseNode);
+          const exp = processMathNode(supNode);
+          return base + '^{' + exp + '}';
+        }
+        break;
+        
+      case 'mo':
+        const op = node.textContent.trim();
+        if (op === '±') return '\\pm';
+        if (op === '×') return '\\times';
+        return op;
+        
+      case 'mi':
+      case 'mn':
+      case 'mtext':
+        return node.textContent.trim();
+    }
+    
+    // Default: process all children
+    let result = '';
+    for (const child of node.childNodes) {
+      result += processMathNode(child);
+    }
+    return result;
+  }
+  
+  return processMathNode(mathNode);
+}
+
+/**
+ * Fallback to just copying the aria-label text
+ */
+function copyAriaLabelAsText(element) {
+  const ariaLabel = element.getAttribute('aria-label');
+  if (ariaLabel) {
+    navigator.clipboard.writeText(ariaLabel)
+      .then(() => {
+        showCopiedFeedback(element);
+        console.log('[INFO] Copied aria-label to clipboard as fallback');
+      })
+      .catch(err => {
+        console.error('[ERROR] Failed to copy text: ', err);
+      });
+  } else {
+    alert('Could not parse the math expression');
+  }
 }
 
 // Utilities
