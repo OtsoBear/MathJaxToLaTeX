@@ -30,7 +30,6 @@ A Chrome extension that converts MathJax/MathML expressions to LaTeX code. This 
 4. A "Copied!" notification will briefly appear to confirm successful copying
 5. Paste the LaTeX code wherever you need it (LaTeX documents, calculators, etc.)
 
-
 ## Project Structure
 
 - `translate.js` - Core functions for converting MathML to LaTeX
@@ -41,6 +40,7 @@ A Chrome extension that converts MathJax/MathML expressions to LaTeX code. This 
 ## Development
 
 If you want to extend the tool:
+
 - Modify conversion logic in `translate.js`
 - Enhance browser integration in `content.js`
 - Add support for additional math notation types
