@@ -25,6 +25,8 @@ const unicode_to_tex = {
     "U+003E": "> ",                     // Greater-than sign
     "U+003F": "? ",                     // Question mark
     "U+0040": "@ ",                     // Commercial at
+    "U+005B": "[ ",                     // Left square bracket
+    "U+005D": "] ",                     // Right square bracket
     "U+005F": "\\_ ",                   // Underscore
     "U+007E": "\\textasciitilde ",      // Tilde
     "U+005E": "\\textasciicircum ",     // Caret
@@ -144,6 +146,7 @@ const unicode_to_tex = {
     "U+221A": " ",            // Square root - handled separately by msqrt
     "U+2061": " ",            // Function application
     "U+2062": " ",            // Invisible times
+    "U+00A0": " ",            // Non-breaking space
     
     // Set theory and logic symbols
     "U+2205": "\\emptyset ",  // Empty set
