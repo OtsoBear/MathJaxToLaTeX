@@ -298,7 +298,7 @@ function convertMathMLToLatex(node) {
         
         case 'mtext':
             const text = getNodeContent(node);
-            if (text === 'π') return '\\pi';
+            if (text === 'π') return '\\pi ';
             if (text === 'd') return 'd';
             return text;
         
@@ -609,7 +609,7 @@ function convertCHTMLToLatex(node) {
 function handleCHTMLIdentifier(node) {
     const textContent = getCHTMLContent(node);
     
-    if (textContent === 'π') return '\\pi';
+    if (textContent === 'π') return '\\pi ';
     
     if (isStandardFunction(textContent)) {
         return '\\' + textContent;
@@ -873,7 +873,7 @@ function convertMathMLFromAssistiveMML(mathmlNode) {
             const mathvariant = mathmlNode.getAttribute('mathvariant');
             console.log(`[DEBUG]     Identifier: "${identifier}", MathVariant: "${mathvariant}"`);
 
-            if (identifier === 'π') latexResult = '\\pi';
+            if (identifier === 'π') latexResult = '\\pi ';
             else if (identifier === '∂') latexResult = '\\partial ';
             else if (isStandardFunction(identifier)) latexResult = '\\' + identifier + ' ';
             else if (mathvariant === 'bold') latexResult = '\\mathbf{' + identifier + '}';
@@ -1170,37 +1170,71 @@ function processChildren(node) {
 
 /**
  * Process square root nodes
- * @param {Element} node - The msqrt node
+ * @param {Element} node - The msqrt node (<g data-mml-node="msqrt">)
  * @return {string} - LaTeX representation
  */
 function processMsqrt(node) {
-    let radicand = '';
-    
-    const mrowElement = node.querySelector('[data-mml-node="mrow"]');
-    if (mrowElement) {
-        radicand = convertMathMLToLatex(mrowElement);
-    } else {
+    let radicandLatex = '';
+
+    // Find the element representing the content (radicand).
+    // This is often an <mrow> or the first element that's not purely graphical.
+    let contentNode = null;
+    if (node.children) {
         for (const child of node.children) {
+            // Look for common content containers first
+            if (child.getAttribute && 
+                ['mrow', 'mi', 'mn', 'mfrac', 'msup', 'msub', 'mover', 'munder', 'munderover', 'mstyle'].includes(child.getAttribute('data-mml-node'))) {
+                contentNode = child;
+                break;
+            }
+            // Fallback: Check if it's a 'g' element likely containing content
+            // Avoid 'g' elements that only contain 'use', 'rect', 'path', 'svg' used for drawing
             if (child.tagName.toLowerCase() === 'g' && 
-                child.getAttribute('data-mml-node') !== 'mo') {
-                radicand += convertMathMLToLatex(child);
-            } else if (child.tagName.toLowerCase() !== 'rect' && 
-                       child.tagName.toLowerCase() !== 'mo' &&
-                       !child.querySelector('use[data-c="221A"]')) {
-                radicand += convertMathMLToLatex(child);
+                !child.querySelector('use[data-c="221A"], use[data-c="E000"], use[data-c="E001"], use[data-c="23B7"]') &&
+                !child.querySelector('rect, path, svg')) {
+                 // Check if this 'g' itself has a meaningful data-mml-node
+                 if (child.getAttribute('data-mml-node') && child.getAttribute('data-mml-node') !== 'msqrt') {
+                     contentNode = child;
+                     break;
+                 }
+                 // If it's just a grouping 'g', look inside it
+                 const innerContent = child.querySelector('[data-mml-node]');
+                 if (innerContent && innerContent.getAttribute('data-mml-node') !== 'msqrt') {
+                     contentNode = child; // Process the whole group if it contains content
+                     break;
+                 }
             }
         }
     }
-    
-    radicand = radicand.replace(/\\sqrt$/, '');
-    radicand = radicand.replace(/\\sqrt\{\}$/, '');
-    radicand = radicand.replace(/\s*\\sqrt\s*/, '');
-    
+
+    // If a content node was found, convert it
+    if (contentNode) {
+        radicandLatex = convertMathMLToLatex(contentNode);
+    } else {
+        // If no specific content node found (e.g., simple sqrt(x)), try processing children cautiously
+        // This is less reliable and might still pick up symbol parts if structure is unexpected
+        console.log('[DEBUG] msqrt: No specific content node found, attempting fallback processing.');
+        let tempRadicand = '';
+        if (node.children) {
+            for (const child of node.children) {
+                 // Skip known graphical elements explicitly
+                 if (child.tagName.toLowerCase() === 'rect' || child.tagName.toLowerCase() === 'svg') continue;
+                 if (child.querySelector('use[data-c="221A"], use[data-c="E000"], use[data-c="E001"], use[data-c="23B7"]')) continue;
+                 
+                 tempRadicand += convertMathMLToLatex(child);
+            }
+        }
+        radicandLatex = tempRadicand;
+    }
+
+    // Clean up any stray symbol parts that might have slipped through (less likely now)
+    radicandLatex = radicandLatex.replace(/[⎷]/g, '').trim(); // Remove the specific unwanted characters
+
     if (!conversionInProgress) {
         console.log('[PROGRESS] Processed square root');
     }
-    
-    return '\\sqrt{' + radicand + '}';
+
+    return '\\sqrt{' + radicandLatex + '}';
 }
 
 /**
@@ -1317,7 +1351,7 @@ function getNodeContent(node) {
     
     if (node.textContent) {
         const content = node.textContent.trim();
-        if (content === 'π') return '\\pi';
+        if (content === 'π') return '\\pi ';
         if (content === '′') return '\'';
         if (content === '\u20D7') return '\u20D7';
         if (content === '\u0305') return '\u0305';
@@ -1332,7 +1366,7 @@ function getNodeContent(node) {
     const textElem = node.querySelector('text');
     if (textElem) {
         const content = textElem.textContent.trim();
-        if (content === 'π') return '\\pi';
+        if (content === 'π') return '\\pi ';
         if (content === 'd') return 'd';
         if (content === '′') return '\'';
         if (content === '\u20D7') return '\u20D7';
@@ -1410,35 +1444,37 @@ function extractAllCharacters(useNodes) {
 
 /**
  * Get Unicode mapping for a code point
- * @param {string} codePoint - The Unicode code point
- * @return {string} - Mapped character or placeholder
+ * @param {string} codePoint - The Unicode code point (hex string)
+ * @return {string} - Mapped LaTeX command or the original character
  */
 function getUnicodeMapping(codePoint) {
     const formattedCodePoint = "U+" + codePoint.toUpperCase().padStart(4, '0');
     
+    // Check if a specific LaTeX mapping exists
     if (typeof unicode_to_tex !== 'undefined' && unicode_to_tex[formattedCodePoint]) {
         return unicode_to_tex[formattedCodePoint];
     }
     
-    const numbers = {
-        '30': '0', '31': '1', '32': '2', '33': '3', '34': '4',
-        '35': '5', '36': '6', '37': '7', '38': '8', '39': '9'
-    };
-    
-    if (numbers[codePoint]) {
-        return numbers[codePoint];
+    // Fallback: Try to return the original character
+    try {
+        const codePointInt = parseInt(codePoint, 16);
+        if (!isNaN(codePointInt)) {
+            const char = String.fromCodePoint(codePointInt);
+            // Add a space after the character for better spacing in LaTeX, unless it's a combining character
+            // Basic check for combining characters (range U+0300–U+036F, U+20D0–U+20FF)
+            if ((codePointInt >= 0x0300 && codePointInt <= 0x036F) || 
+                (codePointInt >= 0x20D0 && codePointInt <= 0x20FF)) {
+                return char; 
+            }
+            return char + ' '; 
+        }
+    } catch (e) {
+        console.log(`[WARNING] Error converting code point ${codePoint} to character:`, e.message);
     }
     
-    const codePointInt = parseInt(codePoint, 16);
-    if (codePointInt >= 0x41 && codePointInt <= 0x5A) {
-        return String.fromCharCode(codePointInt);
-    }
-    if (codePointInt >= 0x61 && codePointInt <= 0x7A) {
-        return String.fromCharCode(codePointInt);
-    }
-    
-    console.log('[WARNING] Unknown Unicode character detected');
-    return `[U+${codePoint}]`;
+    // If conversion fails or no mapping, log a warning and return a placeholder
+    console.log(`[WARNING] No mapping found for Unicode character ${formattedCodePoint}, and could not convert to character.`);
+    return `[${formattedCodePoint}]`; // Keep placeholder as last resort
 }
 
 /**

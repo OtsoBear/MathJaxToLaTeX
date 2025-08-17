@@ -1,12 +1,15 @@
 /**
  * MathJaxToLaTeX - Content Script
- * 
+ *
  * This script provides functionality for:
  * 1. Converting MathJax elements to LaTeX
  * 2. Enabling copy functionality for MathJax elements
  * 3. Disabling unwanted menu panels on kampus.sanomapro.fi
  * 4. Managing text selection behavior on kampus.sanomapro.fi
  */
+
+// Import utilities (for browser extension context, these would be loaded separately)
+// In a real extension, utils.js would be loaded before content.js in manifest.json
 
 // Configuration
 const CONFIG = {
@@ -23,6 +26,14 @@ let conversionCache = {
   result: null
 };
 
+// Store cleanup functions and observers
+let cleanupFunctions = [];
+let observers = {
+  mathJax: null,
+  head: null
+};
+let intervalIds = [];
+
 /**
  * Converts MathML to LaTeX format
  * @param {string} mathmlInput - The MathML input to convert
@@ -36,9 +47,8 @@ function convertToLatex(mathmlInput) {
   }
         
   try {
-    // Parse the MathML input
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = mathmlInput;
+    // Parse the MathML input safely
+    const tempDiv = safeParseHTML(mathmlInput);
     
     // Find the math node
     const mathNode = tempDiv.querySelector('[data-mml-node="math"]');
@@ -69,14 +79,14 @@ function convertToLatex(mathmlInput) {
  */
 function setupMathJaxOverlay() {
   // Find both standard MathJax containers and g elements with data-mml-node="math"
-  const mathJaxContainers = document.querySelectorAll('mjx-container.MathJax');
+  const mathJaxContainers = document.querySelectorAll('mjx-container.MathJax:not(.mathjax-copyable)');
   const mathGElements = document.querySelectorAll('g[data-mml-node="math"]');
   
   // Process standard MathJax containers
   mathJaxContainers.forEach(element => {
     element.classList.add('mathjax-copyable');
     
-    element.addEventListener('click', function(event) {
+    const clickHandler = function(event) {
       // Get the aria-label for user feedback
       const ariaLabel = element.getAttribute('aria-label');
       if (ariaLabel) {
@@ -103,35 +113,20 @@ function setupMathJaxOverlay() {
             const latexContent = convertMathMLFromAssistiveMML(assistiveMML);
             console.log('[DEBUG] Generated LaTeX:', latexContent);
             
-            navigator.clipboard.writeText(latexContent)
-              .then(() => {
-                showCopiedFeedback(element);
-                console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
-              })
-              .catch(err => {
-                console.error('[ERROR] Failed to copy LaTeX: ', err);
-              });
+            copyToClipboardWithFeedback(latexContent, element, 'Copied to clipboard');
           } catch (error) {
             console.error('[ERROR] Error converting assistive MathML:', error);
             
             // Fallback: try direct MathML from assistive-mml
             try {
               const mathML = assistiveMML.outerHTML;
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = mathML;
+              const tempDiv = safeParseHTML(mathML);
               
               // Try fallback direct processing
               const latexContent = processAssistiveMathML(tempDiv.querySelector('math'));
               console.log('[DEBUG] Fallback LaTeX:', latexContent);
               
-              navigator.clipboard.writeText(latexContent)
-                .then(() => {
-                  showCopiedFeedback(element);
-                  console.log('[SUCCESS] Copied to clipboard (fallback): ' + latexContent);
-                })
-                .catch(err => {
-                  console.error('[ERROR] Failed to copy LaTeX (fallback): ', err);
-                });
+              copyToClipboardWithFeedback(latexContent, element, 'Copied to clipboard (fallback)');
             } catch (fallbackError) {
               console.error('[ERROR] Fallback conversion also failed:', fallbackError);
               // Final fallback: use the aria-label attribute
@@ -150,14 +145,7 @@ function setupMathJaxOverlay() {
           console.log('[INFO] Using CHTML structure for conversion');
           const latexContent = convertMathMLToLatex(element);
           
-          navigator.clipboard.writeText(latexContent)
-            .then(() => {
-              showCopiedFeedback(element);
-              console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
-            })
-            .catch(err => {
-              console.error('[ERROR] Failed to copy LaTeX: ', err);
-            });
+          copyToClipboardWithFeedback(latexContent, element, 'Copied to clipboard');
           
           event.preventDefault();
           event.stopPropagation();
@@ -176,31 +164,24 @@ function setupMathJaxOverlay() {
         
         if (htmlContent) {
           const latexContent = convertToLatex(htmlContent);
-          navigator.clipboard.writeText(latexContent)
-            .then(() => {
-              showCopiedFeedback(element);
-              console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
-            })
-            .catch(err => {
-              console.error('[ERROR] Failed to copy HTML: ', err);
-            });
+          copyToClipboardWithFeedback(latexContent, element, 'Copied to clipboard');
         }
       } else {
         const ariaLabel = element.getAttribute('aria-label');
         if (ariaLabel) {
-          navigator.clipboard.writeText(ariaLabel)
-            .then(() => {
-              showCopiedFeedback(element);
-              console.log('[INFO] Copied aria-label to clipboard');
-            })
-            .catch(err => {
-              console.error('[ERROR] Failed to copy text: ', err);
-            });
+          copyToClipboardWithFeedback(ariaLabel, element, 'Copied aria-label to clipboard');
         }
       }
       
       event.preventDefault();
       event.stopPropagation();
+    };
+    
+    element.addEventListener('click', clickHandler);
+    
+    // Store cleanup function
+    cleanupFunctions.push(() => {
+      element.removeEventListener('click', clickHandler);
     });
   });
   
@@ -217,24 +198,24 @@ function setupMathJaxOverlay() {
     
     clickableParent.classList.add('mathjax-copyable');
     
-    clickableParent.addEventListener('click', function(event) {
+    const clickHandler = function(event) {
       // Use the math element directly
       const htmlContent = element.outerHTML;
       
       if (htmlContent) {
         const latexContent = convertToLatex(htmlContent);
-        navigator.clipboard.writeText(latexContent)
-          .then(() => {
-            showCopiedFeedback(clickableParent);
-            console.log('[SUCCESS] Copied to clipboard: ' + latexContent);
-          })
-          .catch(err => {
-            console.error('[ERROR] Failed to copy HTML: ', err);
-          });
+        copyToClipboardWithFeedback(latexContent, clickableParent, 'Copied to clipboard');
       }
       
       event.preventDefault();
       event.stopPropagation();
+    };
+    
+    clickableParent.addEventListener('click', clickHandler);
+    
+    // Store cleanup function
+    cleanupFunctions.push(() => {
+      clickableParent.removeEventListener('click', clickHandler);
     });
   });
 }
@@ -311,14 +292,7 @@ function processAssistiveMathML(mathNode) {
 function copyAriaLabelAsText(element) {
   const ariaLabel = element.getAttribute('aria-label');
   if (ariaLabel) {
-    navigator.clipboard.writeText(ariaLabel)
-      .then(() => {
-        showCopiedFeedback(element);
-        console.log('[INFO] Copied aria-label to clipboard as fallback');
-      })
-      .catch(err => {
-        console.error('[ERROR] Failed to copy text: ', err);
-      });
+    copyToClipboardWithFeedback(ariaLabel, element, 'Copied aria-label to clipboard as fallback');
   } else {
     alert('Could not parse the math expression');
   }
@@ -333,6 +307,37 @@ function isOnKampusDomain() {
   return window.location.hostname === CONFIG.domainSpecific.kampus;
 }
 
+// Helper functions that would normally be imported from utils.js
+// In a real extension, these would come from the utils module
+
+/**
+ * Safely parse HTML string using DOMParser
+ * @param {string} htmlString - The HTML string to parse
+ * @returns {HTMLElement} - The parsed element
+ */
+function safeParseHTML(htmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${htmlString}</div>`, 'text/html');
+  return doc.body.firstChild;
+}
+
+/**
+ * Copy text to clipboard with feedback
+ * @param {string} text - Text to copy
+ * @param {HTMLElement} element - Element to show feedback near
+ * @param {string} successMessage - Success log message
+ * @returns {Promise<void>}
+ */
+async function copyToClipboardWithFeedback(text, element, successMessage = 'Copied to clipboard') {
+  try {
+    await navigator.clipboard.writeText(text);
+    showCopiedFeedback(element);
+    console.log(`[SUCCESS] ${successMessage}: ${text}`);
+  } catch (err) {
+    console.error('[ERROR] Failed to copy: ', err);
+  }
+}
+
 /**
  * Shows feedback when content is copied
  * @param {HTMLElement} element - The element that was clicked to copy
@@ -344,18 +349,21 @@ function showCopiedFeedback(element) {
   
   // Position near the element
   const rect = element.getBoundingClientRect();
-  feedback.style.top = `${rect.top + window.scrollY - 30}px`;
-  feedback.style.left = `${rect.left + window.scrollX}px`;
-  
-  // Style the feedback element
-  feedback.style.position = 'absolute';
-  feedback.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  feedback.style.color = 'white';
-  feedback.style.padding = '5px 10px';
-  feedback.style.borderRadius = '4px';
-  feedback.style.pointerEvents = 'none';
-  feedback.style.zIndex = '10000';
-  feedback.style.animation = 'fade-out 2s forwards';
+  feedback.style.cssText = `
+    position: absolute;
+    top: ${rect.top + window.scrollY - 30}px;
+    left: ${rect.left + window.scrollX}px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 10000;
+    animation: fade-out 2s forwards;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+  `;
   
   // Add style for animation if not already present
   if (!document.getElementById('copy-feedback-style')) {
@@ -366,11 +374,6 @@ function showCopiedFeedback(element) {
         0% { opacity: 1; }
         70% { opacity: 1; }
         100% { opacity: 0; }
-      }
-      .mathjax-copy-feedback {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        font-weight: 500;
       }
     `;
     document.head.appendChild(style);
@@ -421,19 +424,26 @@ function permanentlyDisableMenuPanels() {
   
   document.head.appendChild(styleEl);
   
-  const headObserver = new MutationObserver(() => {
+  // Clean up old observer if exists
+  if (observers.head) {
+    observers.head.disconnect();
+  }
+  
+  observers.head = new MutationObserver(() => {
     if (!document.getElementById('menu-panel-disabler')) {
       document.head.appendChild(styleEl.cloneNode(true));
     }
   });
   
-  headObserver.observe(document.head, { childList: true });
+  observers.head.observe(document.head, { childList: true });
   
-  setInterval(() => {
+  const intervalId = setInterval(() => {
     if (!document.getElementById('menu-panel-disabler')) {
       document.head.appendChild(styleEl.cloneNode(true));
     }
   }, CONFIG.styleCheckInterval);
+  
+  intervalIds.push(intervalId);
 }
 
 /**
@@ -491,7 +501,7 @@ function setupTextDeselection() {
     return false;
   }
   
-  document.addEventListener('mousedown', function(event) {
+  const mousedownHandler = function(event) {
     const isTextContent = isAllowedTextArea(event.target);
     
     isTextElementMouseDown = isTextContent;
@@ -499,16 +509,16 @@ function setupTextDeselection() {
     if (!isTextContent) {
       window.getSelection().removeAllRanges();
     }
-  }, true);
+  };
   
-  document.addEventListener('mouseup', function(event) {
+  const mouseupHandler = function(event) {
     if (!isTextElementMouseDown && !isAllowedTextArea(event.target)) {
       window.getSelection().removeAllRanges();
     }
     isTextElementMouseDown = false;
-  }, true);
+  };
   
-  document.addEventListener('click', function(event) {
+  const clickHandler = function(event) {
     const isTextContent = isAllowedTextArea(event.target);
     
     if (!isTextContent) {
@@ -516,30 +526,30 @@ function setupTextDeselection() {
         window.getSelection().removeAllRanges();
       }, 0);
     }
-  }, true);
-  
-  const originalAddEventListener = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (type === 'pointerup' || type === 'pointerdown' || type === 'mousedown' || type === 'mouseup') {
-      const wrappedListener = function(event) {
-        const isTextContent = isAllowedTextArea(event.target);
-        
-        if (!isTextContent) {
-          setTimeout(() => window.getSelection().removeAllRanges(), 0);
-        }
-        return listener.apply(this, arguments);
-      };
-      return originalAddEventListener.call(this, type, wrappedListener, options);
-    }
-    return originalAddEventListener.call(this, type, listener, options);
   };
+  
+  document.addEventListener('mousedown', mousedownHandler, true);
+  document.addEventListener('mouseup', mouseupHandler, true);
+  document.addEventListener('click', clickHandler, true);
+  
+  // Store cleanup functions
+  cleanupFunctions.push(() => {
+    document.removeEventListener('mousedown', mousedownHandler, true);
+    document.removeEventListener('mouseup', mouseupHandler, true);
+    document.removeEventListener('click', clickHandler, true);
+  });
 }
 
 /**
  * Sets up a mutation observer for MathJax elements
  */
 function setupMathJaxObserver() {
-  const mathJaxObserver = new MutationObserver((mutations) => {
+  // Clean up old observer if exists
+  if (observers.mathJax) {
+    observers.mathJax.disconnect();
+  }
+  
+  observers.mathJax = new MutationObserver((mutations) => {
     let mathJaxAdded = false;
     
     for (const mutation of mutations) {
@@ -562,12 +572,42 @@ function setupMathJaxObserver() {
     }
   });
   
-  mathJaxObserver.observe(document.body, {
+  observers.mathJax.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: false,
     characterData: false
   });
+}
+
+/**
+ * Cleanup function to remove all event listeners and observers
+ */
+function cleanup() {
+  // Disconnect all observers
+  if (observers.mathJax) {
+    observers.mathJax.disconnect();
+    observers.mathJax = null;
+  }
+  
+  if (observers.head) {
+    observers.head.disconnect();
+    observers.head = null;
+  }
+  
+  // Clear all intervals
+  intervalIds.forEach(id => clearInterval(id));
+  intervalIds = [];
+  
+  // Run all cleanup functions
+  cleanupFunctions.forEach(fn => fn());
+  cleanupFunctions = [];
+  
+  // Clear cache
+  conversionCache = {
+    input: null,
+    result: null
+  };
 }
 
 /**
@@ -590,3 +630,7 @@ if (document.readyState === 'loading') {
 } else {
   initialize();
 }
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', cleanup);
+window.addEventListener('unload', cleanup);
