@@ -1,0 +1,13 @@
+{
+  "name": "mathjax-to-latex-test",
+  "version": "1.0.0",
+  "description": "Test suite for MathJax to LaTeX Chrome extension",
+  "scripts": {
+    "test": "node tests/extension.test.js",
+    "test:verbose": "node tests/extension.test.js --verbose"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.0.0",
+    "playwright": "^1.40.0"
+  }
+}

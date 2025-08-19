@@ -62,6 +62,10 @@ function convertToLatex(mathmlInput) {
     // Convert to LaTeX using the function from translate.js
     const latex = convertMathMLToLatex(mathNode);
     
+    console.log('[DEBUG] Result from convertMathMLToLatex:', latex);
+    console.log('[DEBUG] Result type:', typeof latex);
+    console.log('[DEBUG] Result length:', latex ? latex.length : 0);
+    
     // Cache the result
     conversionCache.input = mathmlInput;
     conversionCache.result = latex;
@@ -163,7 +167,14 @@ function setupMathJaxOverlay() {
         });
         
         if (htmlContent) {
+          console.log('[DEBUG] HTML content length being converted:', htmlContent.length);
+          console.log('[DEBUG] First 200 chars of HTML:', htmlContent.substring(0, 200));
+          
           const latexContent = convertToLatex(htmlContent);
+          
+          console.log('[DEBUG] LaTeX result from convertToLatex:', latexContent);
+          console.log('[DEBUG] LaTeX result length:', latexContent.length);
+          
           copyToClipboardWithFeedback(latexContent, element, 'Copied to clipboard');
         }
       } else {

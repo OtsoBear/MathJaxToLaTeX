@@ -175,6 +175,7 @@ function convertMathMLToLatex(node) {
             return result; // Return intermediate result for recursion
         
         case 'mrow':
+            console.log('[DEBUG] Processing mrow with', node.children ? node.children.length : 0, 'children');
             if (node.getAttribute && node.getAttribute('data-semantic-role') === "equality") {
                 const children = Array.from(node.children || []);
                 let equalsIndex = -1;
@@ -218,7 +219,14 @@ function convertMathMLToLatex(node) {
             return result;
         
         case 'mi':
+            // Debug the node structure
+            console.log('[DEBUG] mi node:', {
+                hasChildren: node.children ? node.children.length : 0,
+                hasUseElement: node.querySelector ? !!node.querySelector('use') : false,
+                innerHTML: node.innerHTML ? node.innerHTML.substring(0, 100) : 'no innerHTML'
+            });
             const mi = getNodeContent(node);
+            console.log('[DEBUG] mi extracted content:', mi);
             if (isStandardFunction(mi)) {
                 return '\\' + mi;
             }
@@ -236,8 +244,15 @@ function convertMathMLToLatex(node) {
             return number;
         
         case 'mo':
+            // Debug the node structure
+            console.log('[DEBUG] mo node:', {
+                hasChildren: node.children ? node.children.length : 0,
+                hasUseElement: node.querySelector ? !!node.querySelector('use') : false,
+                innerHTML: node.innerHTML ? node.innerHTML.substring(0, 100) : 'no innerHTML'
+            });
             // Use getNodeContent to handle <use> elements correctly
-            const opContent = getNodeContent(node); 
+            const opContent = getNodeContent(node);
+            console.log('[DEBUG] mo extracted content:', opContent);
             
             // Handle vector arrow character (should be empty as it's handled by mover)
             if (opContent === '\u20D7') return ''; 
@@ -428,6 +443,7 @@ function convertMathMLToLatex(node) {
 
         default:
             result = processChildren(node);
+            console.log('[DEBUG] mrow result:', result.substring(0, 50), '...');
             if (isTopLevel) conversionInProgress = false;
             return result;
     }
@@ -1081,6 +1097,11 @@ function processChildren(node) {
     let result = '';
     let skipNext = false;
     
+    // Debug: log what we're processing
+    if (node.children && node.children.length > 0) {
+        console.log('[DEBUG processChildren] Processing', node.children.length, 'children of', node.getAttribute ? node.getAttribute('data-mml-node') : 'unknown');
+    }
+    
     if (node.getAttribute && node.getAttribute('data-semantic-role') === 'prefix function') {
         const funcNode = node.querySelector('[data-semantic-type="function"]');
         if (funcNode) {
@@ -1162,9 +1183,17 @@ function processChildren(node) {
         }
         
         const childResult = convertMathMLToLatex(child);
+        
+        // Debug: log what each child produces
+        if (childResult && childResult.length > 0) {
+            const childType = child.getAttribute ? child.getAttribute('data-mml-node') : 'unknown';
+            console.log('[DEBUG processChildren] Child', childType, 'produced:', childResult);
+        }
+        
         result += childResult;
     }
     
+    console.log('[DEBUG processChildren] Final result:', result);
     return result;
 }
 
@@ -1305,6 +1334,18 @@ function getArgumentAfterFunction(node, functionName) {
  * @return {string} - Text content or special handling result
  */
 function getNodeContent(node) {
+    // Add debug logging to track what's being extracted
+    const nodeType = node.nodeName ? node.nodeName.toLowerCase() : 'unknown';
+    
+    // Critical: Check if we're in an automated test environment
+    // In automated tests, querySelector might not work properly on SVG elements
+    if (!node.querySelector && node.querySelectorAll) {
+        node.querySelector = function(selector) {
+            const results = this.querySelectorAll(selector);
+            return results.length > 0 ? results[0] : null;
+        };
+    }
+    
     if (node.textContent && node.textContent.includes('\u20D7')) {
         const baseChar = node.textContent.replace('\u20D7', '');
         if (baseChar) {
@@ -1360,7 +1401,10 @@ function getNodeContent(node) {
             return '\\' + content;
         }
         
-        return content;
+        // Don't return empty content - continue to check for use elements
+        if (content !== '') {
+            return content;
+        }
     }
     
     const textElem = node.querySelector('text');
@@ -1374,9 +1418,72 @@ function getNodeContent(node) {
         return content;
     }
     
-    const useElem = node.querySelector('use');
+    // Try multiple methods to find the use element
+    let useElem = null;
+    
+    // Method 1: querySelector
+    if (node.querySelector) {
+        useElem = node.querySelector('use');
+    }
+    
+    // Method 2: check children property
+    if (!useElem && node.children && node.children.length > 0) {
+        console.log('[DEBUG getNodeContent] Checking children for use element, children.length:', node.children.length);
+        for (let i = 0; i < node.children.length; i++) {
+            const child = node.children[i];
+            console.log('[DEBUG getNodeContent] Child', i, 'tagName:', child.tagName);
+            if (child.tagName && child.tagName.toLowerCase() === 'use') {
+                useElem = child;
+                console.log('[DEBUG getNodeContent] Found use element via children');
+                break;
+            }
+        }
+    }
+    
+    // Method 3: check childNodes
+    if (!useElem && node.childNodes && node.childNodes.length > 0) {
+        console.log('[DEBUG getNodeContent] Checking childNodes for use element, childNodes.length:', node.childNodes.length);
+        for (let i = 0; i < node.childNodes.length; i++) {
+            const child = node.childNodes[i];
+            if (child.nodeType === 1) { // Element node
+                console.log('[DEBUG getNodeContent] ChildNode', i, 'tagName:', child.tagName);
+                if (child.tagName && child.tagName.toLowerCase() === 'use') {
+                    useElem = child;
+                    console.log('[DEBUG getNodeContent] Found use element via childNodes');
+                    break;
+                }
+            }
+        }
+    }
+    
     if (useElem) {
-        const dataC = useElem.getAttribute('data-c');
+        // Debug: log what we're getting
+        console.log('[DEBUG getNodeContent] Found use element for', nodeType);
+        
+        // Get the data-c attribute - this might be failing in automated tests
+        const dataC = useElem.getAttribute ? useElem.getAttribute('data-c') : null;
+        console.log('[DEBUG getNodeContent] getAttribute returned:', dataC, 'type:', typeof dataC);
+        
+        if (dataC) {
+            const mapped = getUnicodeMapping(dataC);
+            console.log('[DEBUG getNodeContent] Mapped', dataC, 'to:', mapped);
+            return mapped; // Return the mapped value immediately
+        }
+        
+        // If getAttribute failed, try parsing the innerHTML/outerHTML
+        // This is a workaround for automated test environments
+        console.log('[DEBUG getNodeContent] getAttribute failed, trying HTML parsing');
+        const useHTML = useElem.outerHTML || node.innerHTML || '';
+        console.log('[DEBUG getNodeContent] HTML to parse:', useHTML.substring(0, 100));
+        const dataCMatch = useHTML.match(/data-c="([^"]+)"/);
+        if (dataCMatch && dataCMatch[1]) {
+            const dataC = dataCMatch[1];
+            const mapped = getUnicodeMapping(dataC);
+            console.log('[DEBUG getNodeContent] Got data-c via HTML parsing:', dataC, '-> mapped:', mapped);
+            return mapped;
+        }
+        
+        console.log('[DEBUG getNodeContent] Failed to extract data-c from use element');
         
         if (isFunctionNameStart(node)) {
             return getFunctionNameFromSequence(node);
@@ -1460,13 +1567,17 @@ function getUnicodeMapping(codePoint) {
         const codePointInt = parseInt(codePoint, 16);
         if (!isNaN(codePointInt)) {
             const char = String.fromCodePoint(codePointInt);
+            
+            // Debug log for ALL characters in automated test
+            console.log('[DEBUG getUnicodeMapping] Converting', formattedCodePoint, 'to char:', char);
+            
             // Add a space after the character for better spacing in LaTeX, unless it's a combining character
             // Basic check for combining characters (range U+0300–U+036F, U+20D0–U+20FF)
-            if ((codePointInt >= 0x0300 && codePointInt <= 0x036F) || 
+            if ((codePointInt >= 0x0300 && codePointInt <= 0x036F) ||
                 (codePointInt >= 0x20D0 && codePointInt <= 0x20FF)) {
-                return char; 
+                return char;
             }
-            return char + ' '; 
+            return char + ' ';
         }
     } catch (e) {
         console.log(`[WARNING] Error converting code point ${codePoint} to character:`, e.message);
