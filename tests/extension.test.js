@@ -18,11 +18,12 @@ async function testExtension() {
   
   // Launch Chrome with the extension loaded
   const browser = await chromium.launchPersistentContext('', {
-    headless: false, // Set to false so you can see what's happening
+    headless: false, // Extensions require headed mode to work properly
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
-      '--no-sandbox'
+      '--no-sandbox',
+      '--start-minimized' // Start the browser minimized
     ],
     // Grant clipboard permissions
     permissions: ['clipboard-read', 'clipboard-write']
@@ -112,12 +113,14 @@ async function testExtension() {
       }
     });
     
-    // Always show the clipboard content for verification
-    console.log('Clipboard content:');
-    console.log('  ', clipboardContent);
-    
     // Check expected result - EXACT character-by-character match required (after trimming)
     const expectedLocalLatex = "A = 2 \\pi \\int _{0 }^{1 }\\mid f \\left( x \\right) \\mid \\sqrt{1 + f ' \\left( x \\right) ^{2 }}dx";
+    
+    // Always show both clipboard content and expected answer for verification
+    console.log('Clipboard content:');
+    console.log('  ', clipboardContent);
+    console.log('Expected answer:');
+    console.log('  ', expectedLocalLatex);
     
     // Trim whitespace from both ends for comparison
     const trimmedClipboard = clipboardContent.trim();
@@ -196,12 +199,14 @@ async function testExtension() {
       }
     });
     
-    // Always show the clipboard content for verification
-    console.log('Clipboard content:');
-    console.log('  ', clipboardContent);
-    
     // Check if it matches expected - EXACT character-by-character match required (after trimming)
     const expectedLatex = "f \\left( a \\right) = \\frac{1 }{2 {\\pi} i }\\oint _{{\\gamma} }\\frac{f \\left( z \\right) }{z - a }d z";
+    
+    // Always show both clipboard content and expected answer for verification
+    console.log('Clipboard content:');
+    console.log('  ', clipboardContent);
+    console.log('Expected answer:');
+    console.log('  ', expectedLatex);
     
     // Trim whitespace from both ends for comparison
     const trimmedClipboard = clipboardContent.trim();
