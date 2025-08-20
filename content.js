@@ -17,6 +17,11 @@ const CONFIG = {
   styleCheckInterval: 5000,     // Interval to check if style elements are still in place
   domainSpecific: {
     kampus: 'kampus.sanomapro.fi'
+  },
+  // Feature toggles for kampus.sanomapro.fi specific functionality
+  kampusFeatures: {
+    disableMenuPanels: true,     // Set to true to disable menu panels on kampus.sanomapro.fi
+    manageTextSelection: true    // Set to true to manage text selection behavior on kampus.sanomapro.fi
   }
 };
 
@@ -341,9 +346,17 @@ function safeParseHTML(htmlString) {
  */
 async function copyToClipboardWithFeedback(text, element, successMessage = 'Copied to clipboard') {
   try {
-    await navigator.clipboard.writeText(text);
+    // Remove trailing single "." if it exists
+    let cleanedText = text;
+    if (cleanedText.endsWith('.') && !cleanedText.endsWith('..') && !cleanedText.endsWith('\\ldots')) {
+      // Check if the dot is not part of a LaTeX command or ellipsis
+      cleanedText = cleanedText.slice(0, -1);
+      console.log('[INFO] Removed trailing period from equation');
+    }
+    
+    await navigator.clipboard.writeText(cleanedText);
     showCopiedFeedback(element);
-    console.log(`[SUCCESS] ${successMessage}: ${text}`);
+    console.log(`[SUCCESS] ${successMessage}: ${cleanedText}`);
   } catch (err) {
     console.error('[ERROR] Failed to copy: ', err);
   }
@@ -402,7 +415,7 @@ function showCopiedFeedback(element) {
  * Disables menu panels on kampus.sanomapro.fi using permanent CSS injection
  */
 function permanentlyDisableMenuPanels() {
-  if (!isOnKampusDomain()) return;
+  if (!isOnKampusDomain() || !CONFIG.kampusFeatures.disableMenuPanels) return;
   
   const styleEl = document.createElement('style');
   styleEl.id = 'menu-panel-disabler';
@@ -461,15 +474,23 @@ function permanentlyDisableMenuPanels() {
  * Sets up text deselection behavior on kampus.sanomapro.fi
  */
 function setupTextDeselection() {
-  if (!isOnKampusDomain()) return;
+  if (!isOnKampusDomain() || !CONFIG.kampusFeatures.manageTextSelection) return;
+  
+  console.log('[DEBUG] Setting up text deselection behavior for kampus.sanomapro.fi');
   
   let isTextElementMouseDown = false;
   
   function isAllowedTextArea(element) {
     if (!element) return false;
     
-    if (element.isContentEditable) return true;
-    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') return true;
+    if (element.isContentEditable) {
+      console.log('[DEBUG] Element is contentEditable:', element);
+      return true;
+    }
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+      console.log('[DEBUG] Element is INPUT or TEXTAREA:', element.tagName);
+      return true;
+    }
     
     const classesToCheck = [
       'editor', 'text-area', 'textarea', 'text-editor', 'rich-text',
@@ -486,17 +507,29 @@ function setupTextDeselection() {
       if (!el || !el.classList) return false;
       
       for (const cls of knownClasses) {
-        if (el.classList.contains(cls)) return true;
+        if (el.classList.contains(cls)) {
+          console.log('[DEBUG] Found known editable class:', cls);
+          return true;
+        }
       }
       
-      return Array.from(el.classList).some(className => {
-        return classesToCheck.some(editClass => 
-          className.toLowerCase().includes(editClass.toLowerCase())
-        );
+      const found = Array.from(el.classList).some(className => {
+        return classesToCheck.some(editClass => {
+          if (className.toLowerCase().includes(editClass.toLowerCase())) {
+            console.log('[DEBUG] Found editable class pattern:', className, 'matches', editClass);
+            return true;
+          }
+          return false;
+        });
       });
+      
+      return found;
     };
     
-    if (checkElement(element)) return true;
+    if (checkElement(element)) {
+      console.log('[DEBUG] Element identified as allowed text area');
+      return true;
+    }
     
     let parent = element.parentElement;
     let depth = 0;
@@ -506,48 +539,101 @@ function setupTextDeselection() {
       depth++;
     }
     
-    if (element.getAttribute('role') === 'textbox') return true;
-    if (element.getAttribute('contenteditable') === 'true') return true;
+    if (element.getAttribute('role') === 'textbox') {
+      console.log('[DEBUG] Element has role="textbox"');
+      return true;
+    }
+    if (element.getAttribute('contenteditable') === 'true') {
+      console.log('[DEBUG] Element has contenteditable="true"');
+      return true;
+    }
     
     return false;
   }
   
   const mousedownHandler = function(event) {
+    // Skip right-click (button 2) to allow context menu on selected text
+    if (event.button === 2) {
+      console.log('[DEBUG] Right-click detected, preserving text selection for context menu');
+      // Don't prevent default or stop propagation for right-clicks
+      return;
+    }
+    
     const isTextContent = isAllowedTextArea(event.target);
+    
+    console.log('[DEBUG] Mousedown event - Button:', event.button, 'Is text content:', isTextContent, 'Target:', event.target);
     
     isTextElementMouseDown = isTextContent;
     
     if (!isTextContent) {
+      console.log('[DEBUG] Clearing text selection on mousedown');
       window.getSelection().removeAllRanges();
     }
   };
   
   const mouseupHandler = function(event) {
-    if (!isTextElementMouseDown && !isAllowedTextArea(event.target)) {
+    // Skip right-click (button 2) to allow context menu on selected text
+    if (event.button === 2) {
+      console.log('[DEBUG] Right-click mouseup, preserving text selection');
+      return;
+    }
+    
+    const isTargetTextArea = isAllowedTextArea(event.target);
+    console.log('[DEBUG] Mouseup event - Button:', event.button, 'Was text mousedown:', isTextElementMouseDown, 'Is target text area:', isTargetTextArea);
+    
+    if (!isTextElementMouseDown && !isTargetTextArea) {
+      console.log('[DEBUG] Clearing text selection on mouseup');
       window.getSelection().removeAllRanges();
     }
     isTextElementMouseDown = false;
   };
   
   const clickHandler = function(event) {
+    // Skip right-click (button 2) to allow context menu on selected text
+    if (event.button === 2) {
+      console.log('[DEBUG] Right-click in click handler, preserving text selection');
+      return;
+    }
+    
     const isTextContent = isAllowedTextArea(event.target);
     
+    console.log('[DEBUG] Click event - Button:', event.button, 'Is text content:', isTextContent, 'Target:', event.target);
+    
     if (!isTextContent) {
+      console.log('[DEBUG] Scheduling text selection clear on click');
       setTimeout(() => {
         window.getSelection().removeAllRanges();
+        console.log('[DEBUG] Text selection cleared after click');
       }, 0);
     }
   };
   
-  document.addEventListener('mousedown', mousedownHandler, true);
-  document.addEventListener('mouseup', mouseupHandler, true);
-  document.addEventListener('click', clickHandler, true);
+  // Add contextmenu handler to ensure right-click context menu works
+  const contextMenuHandler = function(event) {
+    const selection = window.getSelection();
+    const hasSelection = selection && selection.toString().length > 0;
+    
+    console.log('[DEBUG] Context menu event - Has selection:', hasSelection, 'Selection text:', selection.toString());
+    
+    // Don't interfere with the context menu
+    // The browser will handle it naturally
+  };
+  
+  // Use false for useCapture to allow normal event flow for right-clicks
+  document.addEventListener('mousedown', mousedownHandler, false);
+  document.addEventListener('mouseup', mouseupHandler, false);
+  document.addEventListener('click', clickHandler, false);
+  document.addEventListener('contextmenu', contextMenuHandler, false);
+  
+  console.log('[DEBUG] Text deselection event handlers attached (bubble phase)');
   
   // Store cleanup functions
   cleanupFunctions.push(() => {
-    document.removeEventListener('mousedown', mousedownHandler, true);
-    document.removeEventListener('mouseup', mouseupHandler, true);
-    document.removeEventListener('click', clickHandler, true);
+    document.removeEventListener('mousedown', mousedownHandler, false);
+    document.removeEventListener('mouseup', mouseupHandler, false);
+    document.removeEventListener('click', clickHandler, false);
+    document.removeEventListener('contextmenu', contextMenuHandler, false);
+    console.log('[DEBUG] Text deselection event handlers removed');
   });
 }
 
@@ -628,8 +714,15 @@ function initialize() {
   setupMathJaxOverlay();
   
   if (isOnKampusDomain()) {
-    setupTextDeselection();
-    permanentlyDisableMenuPanels();
+    // Only run kampus-specific features if enabled in CONFIG
+    if (CONFIG.kampusFeatures.manageTextSelection) {
+      setupTextDeselection();
+      console.log('[INFO] Text selection management enabled for kampus.sanomapro.fi');
+    }
+    if (CONFIG.kampusFeatures.disableMenuPanels) {
+      permanentlyDisableMenuPanels();
+      console.log('[INFO] Menu panel disabling enabled for kampus.sanomapro.fi');
+    }
   }
   
   setupMathJaxObserver();
