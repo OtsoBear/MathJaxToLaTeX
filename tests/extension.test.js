@@ -70,11 +70,90 @@ async function testExtension() {
     });
   }
 
-  console.log('\n=== Test 1: Local Test Equation ===');
+  console.log('\n=== Test 1: MathJax.org Hero Math ===');
   
-  // Test 1: Your local test equation
-  const testFilePath = 'file:///' + path.join(__dirname, 'MathJaxTestEquation.html').replace(/\\/g, '/');
-  await page.goto(testFilePath);
+  // Test 1: MathJax.org website
+  await page.goto('https://www.mathjax.org/');
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(100);
+  
+  // Click on the hero-math div
+  const heroMath = await page.locator('.hero-math').first();
+  
+  if (await heroMath.count() > 0) {
+    // Clear clipboard first
+    await page.evaluate(() => {
+      navigator.clipboard.writeText('');
+    });
+    
+    await heroMath.click();
+    await page.waitForTimeout(100);
+    
+    // Check clipboard content
+    const clipboardContent = await page.evaluate(async () => {
+      try {
+        return await navigator.clipboard.readText();
+      } catch (e) {
+        return 'Could not read clipboard: ' + e.message;
+      }
+    });
+    
+    // Check if it matches expected - EXACT character-by-character match required (after trimming)
+    const expectedLatex = "f \\left( a \\right) = \\frac{1 }{2 {\\pi} i }\\oint _{{\\gamma} }\\frac{f \\left( z \\right) }{z - a }d z";
+    
+    // Always show both clipboard content and expected answer for verification
+    console.log('Clipboard content:');
+    console.log('  ', clipboardContent);
+    console.log('Expected answer:');
+    console.log('  ', expectedLatex);
+    
+    // Normalize both strings by removing all whitespace for comparison
+    const normalizedClipboard = normalizeForComparison(clipboardContent);
+    const normalizedExpected = normalizeForComparison(expectedLatex);
+    
+    // Compare normalized versions (ignoring all whitespace differences)
+    if (normalizedClipboard === normalizedExpected) {
+      console.log(colors.green + '✓ Test 1: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
+      testPassed = true;
+    } else {
+      console.log(colors.red + '✗ Test 1: FAILED - Not an exact match' + colors.reset);
+      console.log('Expected (normalized):');
+      console.log('  ', normalizedExpected);
+      console.log(`Character count - Got: ${normalizedClipboard.length}, Expected: ${normalizedExpected.length}`);
+      
+      // Show character-by-character differences if verbose
+      if (VERBOSE) {
+        if (normalizedClipboard.length === normalizedExpected.length) {
+          for (let i = 0; i < normalizedClipboard.length; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  Difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+            }
+          }
+        } else {
+          // Show where the strings differ in length
+          const minLen = Math.min(normalizedClipboard.length, normalizedExpected.length);
+          for (let i = 0; i < minLen; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  First difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+              break;
+            }
+          }
+          if (normalizedClipboard.length > normalizedExpected.length) {
+            console.log(`  Extra characters at end: "${normalizedClipboard.substring(normalizedExpected.length)}"`);
+          }
+        }
+      }
+    }
+  } else {
+    console.log('Could not find hero-math element on MathJax.org');
+  }
+  
+  console.log('\n=== Test 2: Integral Equation ===');
+  await page.waitForTimeout(100);
+  
+  // Test 2: Your local test equation with integral
+  const testFile2Path = 'file:///' + path.join(__dirname, 'test_integral.html').replace(/\\/g, '/');
+  await page.goto(testFile2Path);
   
   // Wait for the page to fully load
   await page.waitForLoadState('networkidle');
@@ -107,6 +186,11 @@ async function testExtension() {
       });
       console.log('Found MathJax element:', elementInfo);
     }
+    
+    // Clear clipboard first
+    await page.evaluate(() => {
+      navigator.clipboard.writeText('');
+    });
     
     // Hover first (like a real user)
     await mathElement.hover();
@@ -142,10 +226,10 @@ async function testExtension() {
     
     // Compare normalized versions (ignoring all whitespace differences)
     if (normalizedClipboard === normalizedExpected) {
-      console.log(colors.green + '✓ Test 1: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
-      testPassed = true;
+      console.log(colors.green + '✓ Test 2: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
+      if (!testPassed) testPassed = true;
     } else {
-      console.log(colors.red + '✗ Test 1: FAILED - Not an exact match' + colors.reset);
+      console.log(colors.red + '✗ Test 2: FAILED - Not an exact match' + colors.reset);
       console.log('Expected (normalized):');
       console.log('  ', normalizedExpected);
       console.log(`Character count - Got: ${normalizedClipboard.length}, Expected: ${normalizedExpected.length}`);
@@ -172,7 +256,6 @@ async function testExtension() {
           }
         }
       }
-      testPassed = false;
     }
     
     if (VERBOSE) {
@@ -188,7 +271,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 3: Your local test equation with system of equations
-  const testFile3Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation3.html').replace(/\\/g, '/');
+  const testFile3Path = 'file:///' + path.join(__dirname, 'test_system_equations.html').replace(/\\/g, '/');
   await page.goto(testFile3Path);
   
   // Wait for the page to fully load
@@ -199,9 +282,9 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Find and click the SVG element (this equation is not in mjx-container)
-  const svgElement = await page.locator('svg[role="img"][viewBox="0 -2181 19932.5 3862"]').first();
+  const svgElement3 = await page.locator('svg[role="img"][viewBox="0 -2181 19932.5 3862"]').first();
   
-  if (await svgElement.count() > 0) {
+  if (await svgElement3.count() > 0) {
     if (VERBOSE) {
       console.log('Found SVG equation element');
     }
@@ -212,11 +295,11 @@ async function testExtension() {
     });
     
     // Hover first (like a real user)
-    await svgElement.hover();
+    await svgElement3.hover();
     await page.waitForTimeout(100);
     
     // Click the element
-    await svgElement.click();
+    await svgElement3.click();
     
     // Wait for the copy to happen
     await page.waitForTimeout(100);
@@ -290,7 +373,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 4: Your local test equation with square root
-  const testFile4Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation4.html').replace(/\\/g, '/');
+  const testFile4Path = 'file:///' + path.join(__dirname, 'test_sqrt.html').replace(/\\/g, '/');
   await page.goto(testFile4Path);
   
   // Wait for the page to fully load
@@ -398,11 +481,11 @@ async function testExtension() {
     console.log('Could not find MathJax element on test page 4');
   }
   
-  console.log('\n=== Test 5: Coordinate Point with Fraction ===');
+  console.log('\n=== Test 5: Coordinate Point with Negative Fraction ===');
   await page.waitForTimeout(100);
   
   // Test 5: Your local test equation with coordinate point
-  const testFile5Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation5.html').replace(/\\/g, '/');
+  const testFile5Path = 'file:///' + path.join(__dirname, 'test_coordinate_negative.html').replace(/\\/g, '/');
   await page.goto(testFile5Path);
   
   // Wait for the page to fully load
@@ -504,7 +587,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 6: Your local test equation with coordinate point and positive fraction
-  const testFile6Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation6.html').replace(/\\/g, '/');
+  const testFile6Path = 'file:///' + path.join(__dirname, 'test_coordinate_positive.html').replace(/\\/g, '/');
   await page.goto(testFile6Path);
   
   // Wait for the page to fully load
@@ -606,7 +689,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 7: Your local test equation with fraction and square root
-  const testFile7Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation7.html').replace(/\\/g, '/');
+  const testFile7Path = 'file:///' + path.join(__dirname, 'test_fraction_sqrt.html').replace(/\\/g, '/');
   await page.goto(testFile7Path);
   
   // Wait for the page to fully load
@@ -708,7 +791,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 8: Your local test equation with cube root and nested square root
-  const testFile8Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation8.html').replace(/\\/g, '/');
+  const testFile8Path = 'file:///' + path.join(__dirname, 'test_cube_root.html').replace(/\\/g, '/');
   await page.goto(testFile8Path);
   
   // Wait for the page to fully load
@@ -810,7 +893,7 @@ async function testExtension() {
   await page.waitForTimeout(100);
   
   // Test 9: Your local test equation with complex nested radicals
-  const testFile9Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation9.html').replace(/\\/g, '/');
+  const testFile9Path = 'file:///' + path.join(__dirname, 'test_complex_radicals.html').replace(/\\/g, '/');
   await page.goto(testFile9Path);
   
   // Wait for the page to fully load
@@ -906,89 +989,6 @@ async function testExtension() {
     }
   } else {
     console.log('Could not find SVG equation element on test page 9');
-  }
-  
-  console.log('\n=== Test 2: MathJax.org Hero Math ===');
-  await page.waitForTimeout(100);
-
-  // Test 2: MathJax.org website
-  await page.goto('https://www.mathjax.org/');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(100);
-  
-  // Click on the hero-math div
-  const heroMath = await page.locator('.hero-math').first();
-  
-  if (await heroMath.count() > 0) {
-    // Clear clipboard first
-    await page.evaluate(() => {
-      navigator.clipboard.writeText('');
-    });
-    
-    await heroMath.click();
-    await page.waitForTimeout(100);
-    
-    // Check clipboard content
-    const clipboardContent = await page.evaluate(async () => {
-      try {
-        return await navigator.clipboard.readText();
-      } catch (e) {
-        return 'Could not read clipboard: ' + e.message;
-      }
-    });
-    
-    // Check if it matches expected - EXACT character-by-character match required (after trimming)
-    const expectedLatex = "f \\left( a \\right) = \\frac{1 }{2 {\\pi} i }\\oint _{{\\gamma} }\\frac{f \\left( z \\right) }{z - a }d z";
-    
-    // Always show both clipboard content and expected answer for verification
-    console.log('Clipboard content:');
-    console.log('  ', clipboardContent);
-    console.log('Expected answer:');
-    console.log('  ', expectedLatex);
-    
-    // Normalize both strings by removing all whitespace for comparison
-    const normalizedClipboard = normalizeForComparison(clipboardContent);
-    const normalizedExpected = normalizeForComparison(expectedLatex);
-    
-    // Compare normalized versions (ignoring all whitespace differences)
-    if (normalizedClipboard === normalizedExpected) {
-      console.log(colors.green + '✓ Test 2: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
-    } else {
-      console.log(colors.red + '✗ Test 2: FAILED - Not an exact match' + colors.reset);
-      console.log('Expected (normalized):');
-      console.log('  ', normalizedExpected);
-      console.log(`Character count - Got: ${normalizedClipboard.length}, Expected: ${normalizedExpected.length}`);
-      
-      // Show character-by-character differences if verbose
-      if (VERBOSE) {
-        if (normalizedClipboard.length === normalizedExpected.length) {
-          for (let i = 0; i < normalizedClipboard.length; i++) {
-            if (normalizedClipboard[i] !== normalizedExpected[i]) {
-              console.log(`  Difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
-            }
-          }
-        } else {
-          // Show where the strings differ in length
-          const minLen = Math.min(normalizedClipboard.length, normalizedExpected.length);
-          for (let i = 0; i < minLen; i++) {
-            if (normalizedClipboard[i] !== normalizedExpected[i]) {
-              console.log(`  First difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
-              break;
-            }
-          }
-          if (normalizedClipboard.length > normalizedExpected.length) {
-            console.log(`  Extra characters at end: "${normalizedClipboard.substring(normalizedExpected.length)}"`);
-          }
-        }
-      }
-      
-      // Only pass if exact match
-      if (testPassed) {
-        console.log('Note: Other tests passed but Test 2 requires exact match');
-      }
-    }
-  } else {
-    console.log('Could not find hero-math element on MathJax.org');
   }
   
   console.log('\n=== Test Complete ===');
