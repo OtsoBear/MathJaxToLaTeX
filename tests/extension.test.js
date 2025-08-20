@@ -704,6 +704,210 @@ async function testExtension() {
     console.log('Could not find SVG equation element on test page 7');
   }
   
+  console.log('\n=== Test 8: Cube Root with Nested Square Root ===');
+  await page.waitForTimeout(100);
+  
+  // Test 8: Your local test equation with cube root and nested square root
+  const testFile8Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation8.html').replace(/\\/g, '/');
+  await page.goto(testFile8Path);
+  
+  // Wait for the page to fully load
+  await page.waitForLoadState('networkidle');
+  
+  // Wait for extension to initialize
+  if (VERBOSE) console.log('Waiting for extension to initialize...');
+  await page.waitForTimeout(100);
+  
+  // Find and click the SVG element (this equation is not in mjx-container)
+  const svgElement8 = await page.locator('svg[role="img"][viewBox="0 -1122 9697.4 1370"]').first();
+  
+  if (await svgElement8.count() > 0) {
+    if (VERBOSE) {
+      console.log('Found SVG equation element');
+    }
+    
+    // Clear clipboard first
+    await page.evaluate(() => {
+      navigator.clipboard.writeText('');
+    });
+    
+    // Hover first (like a real user)
+    await svgElement8.hover();
+    await page.waitForTimeout(100);
+    
+    // Click the element
+    await svgElement8.click();
+    
+    // Wait for the copy to happen
+    await page.waitForTimeout(100);
+    
+    // Check clipboard content
+    const clipboardContent = await page.evaluate(async () => {
+      try {
+        return await navigator.clipboard.readText();
+      } catch (e) {
+        return 'Could not read clipboard: ' + e.message;
+      }
+    });
+    
+    // Check expected result for cube root with nested square root equation
+    const expectedTest8Latex = "f\\left(x\\right)=\\sqrt[3]{x+\\sqrt{4-2x}}";
+    
+    // Always show both clipboard content and expected answer for verification
+    console.log('Clipboard content:');
+    console.log('  ', clipboardContent);
+    console.log('Expected answer:');
+    console.log('  ', expectedTest8Latex);
+    
+    // Normalize both strings by removing all whitespace for comparison
+    const normalizedClipboard = normalizeForComparison(clipboardContent);
+    const normalizedExpected = normalizeForComparison(expectedTest8Latex);
+    
+    // Compare normalized versions (ignoring all whitespace differences)
+    if (normalizedClipboard === normalizedExpected) {
+      console.log(colors.green + '✓ Test 8: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
+      if (!testPassed) testPassed = true; // Set to true if any test passes
+    } else {
+      console.log(colors.red + '✗ Test 8: FAILED - Not an exact match' + colors.reset);
+      console.log('Expected (normalized):');
+      console.log('  ', normalizedExpected);
+      console.log(`Character count - Got: ${normalizedClipboard.length}, Expected: ${normalizedExpected.length}`);
+      
+      // Show character-by-character differences if verbose
+      if (VERBOSE) {
+        if (normalizedClipboard.length === normalizedExpected.length) {
+          for (let i = 0; i < normalizedClipboard.length; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  Difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+            }
+          }
+        } else {
+          // Show where the strings differ in length
+          const minLen = Math.min(normalizedClipboard.length, normalizedExpected.length);
+          for (let i = 0; i < minLen; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  First difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+              break;
+            }
+          }
+          if (normalizedClipboard.length > normalizedExpected.length) {
+            console.log(`  Extra characters at end: "${normalizedClipboard.substring(normalizedExpected.length)}"`);
+          }
+        }
+      }
+    }
+    
+    if (VERBOSE) {
+      // Check if feedback appeared
+      const feedbackAppeared = await page.locator('.mathjax-copy-feedback').count() > 0;
+      console.log('Copied feedback appeared:', feedbackAppeared);
+    }
+  } else {
+    console.log('Could not find SVG equation element on test page 8');
+  }
+  
+  console.log('\n=== Test 9: Complex Nested Radicals ===');
+  await page.waitForTimeout(100);
+  
+  // Test 9: Your local test equation with complex nested radicals
+  const testFile9Path = 'file:///' + path.join(__dirname, 'MathJaxTestEquation9.html').replace(/\\/g, '/');
+  await page.goto(testFile9Path);
+  
+  // Wait for the page to fully load
+  await page.waitForLoadState('networkidle');
+  
+  // Wait for extension to initialize
+  if (VERBOSE) console.log('Waiting for extension to initialize...');
+  await page.waitForTimeout(100);
+  
+  // Find and click the SVG element (this equation is not in mjx-container)
+  const svgElement9 = await page.locator('svg[role="img"][viewBox="0 -1438.5 21915.8 1861"]').first();
+  
+  if (await svgElement9.count() > 0) {
+    if (VERBOSE) {
+      console.log('Found SVG equation element');
+    }
+    
+    // Clear clipboard first
+    await page.evaluate(() => {
+      navigator.clipboard.writeText('');
+    });
+    
+    // Hover first (like a real user)
+    await svgElement9.hover();
+    await page.waitForTimeout(100);
+    
+    // Click the element
+    await svgElement9.click();
+    
+    // Wait for the copy to happen
+    await page.waitForTimeout(100);
+    
+    // Check clipboard content
+    const clipboardContent = await page.evaluate(async () => {
+      try {
+        return await navigator.clipboard.readText();
+      } catch (e) {
+        return 'Could not read clipboard: ' + e.message;
+      }
+    });
+    
+    // Check expected result for complex nested radicals equation
+    const expectedTest9Latex = "f\\left(x\\right)=\\sqrt{x\\sqrt{2+\\sqrt{x}}-x\\sqrt[4]{x}}\\cdot \\sqrt{x\\sqrt{2+\\sqrt{x}}+x\\sqrt[4]{x}}";
+    
+    // Always show both clipboard content and expected answer for verification
+    console.log('Clipboard content:');
+    console.log('  ', clipboardContent);
+    console.log('Expected answer:');
+    console.log('  ', expectedTest9Latex);
+    
+    // Normalize both strings by removing all whitespace for comparison
+    const normalizedClipboard = normalizeForComparison(clipboardContent);
+    const normalizedExpected = normalizeForComparison(expectedTest9Latex);
+    
+    // Compare normalized versions (ignoring all whitespace differences)
+    if (normalizedClipboard === normalizedExpected) {
+      console.log(colors.green + '✓ Test 9: EXACT MATCH - Every character matches perfectly (ignoring whitespace)!' + colors.reset);
+      if (!testPassed) testPassed = true; // Set to true if any test passes
+    } else {
+      console.log(colors.red + '✗ Test 9: FAILED - Not an exact match' + colors.reset);
+      console.log('Expected (normalized):');
+      console.log('  ', normalizedExpected);
+      console.log(`Character count - Got: ${normalizedClipboard.length}, Expected: ${normalizedExpected.length}`);
+      
+      // Show character-by-character differences if verbose
+      if (VERBOSE) {
+        if (normalizedClipboard.length === normalizedExpected.length) {
+          for (let i = 0; i < normalizedClipboard.length; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  Difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+            }
+          }
+        } else {
+          // Show where the strings differ in length
+          const minLen = Math.min(normalizedClipboard.length, normalizedExpected.length);
+          for (let i = 0; i < minLen; i++) {
+            if (normalizedClipboard[i] !== normalizedExpected[i]) {
+              console.log(`  First difference at position ${i}: got '${normalizedClipboard[i]}' (code: ${normalizedClipboard.charCodeAt(i)}), expected '${normalizedExpected[i]}' (code: ${normalizedExpected.charCodeAt(i)})`);
+              break;
+            }
+          }
+          if (normalizedClipboard.length > normalizedExpected.length) {
+            console.log(`  Extra characters at end: "${normalizedClipboard.substring(normalizedExpected.length)}"`);
+          }
+        }
+      }
+    }
+    
+    if (VERBOSE) {
+      // Check if feedback appeared
+      const feedbackAppeared = await page.locator('.mathjax-copy-feedback').count() > 0;
+      console.log('Copied feedback appeared:', feedbackAppeared);
+    }
+  } else {
+    console.log('Could not find SVG equation element on test page 9');
+  }
+  
   console.log('\n=== Test 2: MathJax.org Hero Math ===');
   await page.waitForTimeout(100);
 

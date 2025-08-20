@@ -114,6 +114,73 @@ function convertSVGNode(node, logger, nodeProcessor, operators, functions) {
       return '\\sqrt{' + content.trim() + '}';
     },
     
+    'mroot': () => {
+      // Handle nth root (cube root, etc.)
+      logger.debug('Processing mroot node with', node.children ? node.children.length : 0, 'children');
+      
+      if (node.children && node.children.length >= 2) {
+        let rootIndex = null;
+        let contentNodes = [];
+        
+        // Process all children to find index and content
+        for (const child of node.children) {
+          const nodeType = child.getAttribute && child.getAttribute('data-mml-node');
+          logger.debug('mroot child:', nodeType);
+          
+          if (nodeType === 'mn') {
+            const content = nodeProcessor.getNodeContent(child);
+            logger.debug('Found mn in mroot with content:', JSON.stringify(content));
+            // Check if this looks like a root index (small number)
+            const trimmedContent = content ? content.trim() : '';
+            logger.debug('Trimmed content:', JSON.stringify(trimmedContent));
+            if (trimmedContent && trimmedContent.match(/^[2-9]$/)) {
+              rootIndex = trimmedContent;
+              logger.debug('Set root index to:', rootIndex);
+            } else {
+              logger.debug('Content did not match root index pattern:', JSON.stringify(trimmedContent));
+            }
+          } else if (nodeType === 'mo') {
+            // Skip the radical symbol
+            const opContent = nodeProcessor.getNodeContent(child);
+            logger.debug('Found mo in mroot with content:', opContent);
+            if (opContent && (opContent.includes('√') || opContent.includes('221A'))) {
+              continue; // Skip radical symbol
+            }
+          } else if (nodeType !== 'mo') {
+            // This is content (not the radical symbol)
+            contentNodes.push(child);
+          }
+        }
+        
+        // If we didn't find content nodes as direct children, look for a wrapper group
+        if (contentNodes.length === 0) {
+          for (const child of node.children) {
+            if (!child.getAttribute || child.getAttribute('data-mml-node') !== 'mn' && child.getAttribute('data-mml-node') !== 'mo') {
+              // This might be a wrapper group containing the content
+              contentNodes.push(child);
+            }
+          }
+        }
+        
+        // Convert the content
+        const rootContent = contentNodes.map(child =>
+          convertSVGNode(child, logger, nodeProcessor, operators, functions)
+        ).join('').trim();
+        
+        logger.debug('mroot - index:', rootIndex, 'content:', rootContent);
+        
+        if (rootIndex && rootContent) {
+          logger.progress('Processed nth root with index ' + rootIndex);
+          return '\\sqrt[' + rootIndex + ']{' + rootContent + '}';
+        }
+      }
+      
+      // Fallback: treat as regular square root
+      const content = nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+      logger.progress('Processed root (fallback to square root)');
+      return '\\sqrt{' + content.trim() + '}';
+    },
+    
     'mfrac': () => {
       if (node.children && node.children.length >= 2) {
         const num = convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
