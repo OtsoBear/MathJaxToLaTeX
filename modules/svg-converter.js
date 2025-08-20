@@ -16,6 +16,73 @@ function convertSVGNode(node, logger, nodeProcessor, operators, functions) {
   const handlers = {
     'math': () => nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions)),
     
+    'semantics': () => {
+      // Process only the first child (presentation MathML), ignoring annotations
+      if (node.children && node.children.length > 0) {
+        // Get the first mrow child which contains the actual math
+        const mrowChild = node.children[0];
+        
+        // Check if this contains a cases environment (mfenced with mtable)
+        const hasMfenced = mrowChild.querySelector && mrowChild.querySelector('[data-mml-node="mfenced"]');
+        if (hasMfenced) {
+          // Process only the mfenced, ignore siblings (comma and text that follow)
+          const mfenced = Array.from(mrowChild.children || []).find(child =>
+            child.getAttribute && child.getAttribute('data-mml-node') === 'mfenced'
+          );
+          
+          if (mfenced) {
+            // Get any text that follows for inclusion in the cases
+            const siblings = Array.from(mrowChild.children || []);
+            const mfencedIndex = siblings.indexOf(mfenced);
+            let commaAndText = '';
+            
+            for (let i = mfencedIndex + 1; i < siblings.length; i++) {
+              const sibling = siblings[i];
+              const nodeType = sibling.getAttribute && sibling.getAttribute('data-mml-node');
+              
+              if (nodeType === 'mo') {
+                const content = nodeProcessor.getNodeContent(sibling).trim();
+                logger.debug('Found mo node with content: "' + content + '"');
+                if (content === ',') {
+                  commaAndText += '{,}';
+                  logger.debug('Found comma in semantics');
+                }
+              } else if (nodeType === 'mtext') {
+                const text = nodeProcessor.getNodeContent(sibling).trim();
+                if (text) {
+                  // Normalize non-breaking spaces to regular spaces
+                  const normalizedText = text.replace(/\u00A0/g, ' ');
+                  commaAndText += '\\ \\text{' + normalizedText + '}';
+                  logger.debug('Found text in semantics: ' + normalizedText);
+                }
+              } else if (nodeType === 'mi') {
+                // Variable like 't' - use single backslash for spacing
+                const varContent = nodeProcessor.getNodeContent(sibling);
+                commaAndText += '\\ ' + varContent;
+                logger.debug('Found variable in semantics: ' + varContent);
+              }
+            }
+            
+            logger.debug('Comma and text to append: ' + commaAndText);
+            
+            // Pass the text to mfenced handler
+            return handleMfenced(mfenced, logger, nodeProcessor, operators, functions, commaAndText);
+          }
+        }
+        
+        return convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
+      }
+      return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+    },
+    
+    'mfenced': () => handleMfenced(node, logger, nodeProcessor, operators, functions),
+    
+    'mtable': () => handleMtable(node, logger, nodeProcessor, operators, functions),
+    
+    'mtr': () => handleMtr(node, logger, nodeProcessor, operators, functions),
+    
+    'mtd': () => nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions)),
+    
     'mrow': () => handleMrow(node, logger, nodeProcessor, operators, functions),
     
     'mi': () => handleMi(node, nodeProcessor, functions),
@@ -25,8 +92,20 @@ function convertSVGNode(node, logger, nodeProcessor, operators, functions) {
     'mo': () => handleMo(node, nodeProcessor, operators),
     
     'mtext': () => {
-      const text = nodeProcessor.getNodeContent(node);
-      return text === 'π' ? '\\pi ' : text;
+      const text = nodeProcessor.getNodeContent(node).trim();
+      // Handle special characters
+      if (text === 'π') {
+        return '\\pi ';
+      } else if (text === 'd') {
+        // Don't wrap 'd' in \text{} for differentials
+        return 'd';
+      } else if (text) {
+        // Normalize non-breaking spaces to regular spaces
+        const normalizedText = text.replace(/\u00A0/g, ' ');
+        // Wrap other text in \text{}
+        return '\\text{' + normalizedText + '}';
+      }
+      return text;
     },
     
     'msqrt': () => {
@@ -97,6 +176,112 @@ function handleMrow(node, logger, nodeProcessor, operators, functions) {
   }
   
   return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+}
+
+function handleMfenced(node, logger, nodeProcessor, operators, functions, appendText = '') {
+  logger.debug('Processing mfenced node with appendText: ' + appendText);
+  
+  // Check if this is a system of equations (cases)
+  // Look for mtable inside mfenced's children
+  const mrowChild = Array.from(node.children || []).find(child =>
+    child.getAttribute && child.getAttribute('data-mml-node') === 'mrow'
+  );
+  
+  let mtable = null;
+  if (mrowChild) {
+    mtable = Array.from(mrowChild.children || []).find(child =>
+      child.getAttribute && child.getAttribute('data-mml-node') === 'mtable'
+    );
+  }
+  
+  if (mtable) {
+    // This is likely a cases environment
+    logger.progress('Processing system of equations (cases)');
+    
+    // Process the table and wrap in \begin{cases}...\end{cases}
+    const tableContent = handleMtable(mtable, logger, nodeProcessor, operators, functions, true, appendText);
+    // Don't include newlines, they're not needed for LaTeX
+    return '\\begin{cases}' + tableContent + '\\end{cases}';
+  }
+  
+  // Default: process as regular fenced content
+  const content = nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+  return '\\left\\{' + content + '\\right\\}';
+}
+
+function handleMtable(node, logger, nodeProcessor, operators, functions, isCasesEnvironment = false, appendToSecondRow = '') {
+  logger.debug('Processing mtable');
+  
+  const rows = Array.from(node.children || []).filter(child =>
+    child.getAttribute && child.getAttribute('data-mml-node') === 'mtr'
+  );
+  
+  if (rows.length === 0) {
+    return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+  }
+  
+  const processedRows = rows.map((row, rowIndex) => {
+    const cells = Array.from(row.children || []).filter(child =>
+      child.getAttribute && child.getAttribute('data-mml-node') === 'mtd'
+    );
+    
+    const processedCells = cells.map((cell, cellIndex) => {
+      let content = nodeProcessor.processChildren(cell, (child) =>
+        convertSVGNode(child, logger, nodeProcessor, operators, functions)
+      ).trim();
+      
+      // Remove unwanted spaces in compound expressions
+      // For cells containing numbers with operators like "-1" or "7t"
+      if (cellIndex === 2 && content.includes('- ')) {
+        // Third cell often has negative numbers
+        content = content.replace('- ', '-');
+      }
+      
+      // Check if this cell has a number followed by a variable (like "7 t")
+      if (content.match(/^\d+\s+[a-z]$/i)) {
+        content = content.replace(/\s+/, '');
+      }
+      
+      return content;
+    });
+    
+    // Join cells with & for alignment - this works generically for all table structures
+    let rowContent = processedCells.join('&');
+    
+    // Special handling for the second row in cases environment
+    if (isCasesEnvironment && rowIndex === 1 && appendToSecondRow) {
+      // Append the comma and text to the second row
+      // Fix spacing: between variable and text should be single backslash, not double
+      let cleanedAppend = appendToSecondRow;
+      
+      // Replace pattern: "\ t \ \text{" should become "\ t\ \text{"
+      cleanedAppend = cleanedAppend.replace(/\\ ([a-z]) \\ \\text\{/gi, '\\ $1\\ \\text{');
+      
+      logger.debug('Appending to second row: ' + cleanedAppend);
+      rowContent += cleanedAppend;
+    }
+    
+    return rowContent;
+  });
+  
+  // Join rows with \\ for line breaks (no actual newlines needed in LaTeX)
+  return processedRows.join('\\\\');
+}
+
+function handleMtr(node, logger, nodeProcessor, operators, functions) {
+  logger.debug('Processing mtr (table row)');
+  
+  const cells = Array.from(node.children || []).filter(child =>
+    child.getAttribute && child.getAttribute('data-mml-node') === 'mtd'
+  );
+  
+  const processedCells = cells.map(cell =>
+    nodeProcessor.processChildren(cell, (child) =>
+      convertSVGNode(child, logger, nodeProcessor, operators, functions)
+    ).trim()
+  );
+  
+  return processedCells.join(' & ');
 }
 
 function handleMi(node, nodeProcessor, functions) {

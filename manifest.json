@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MathJax Copy Tool",
-  "version": "2.0",
+  "version": "2.5",
   "description": "Copy LaTeX from MathJax elements by clicking on them",
   "permissions": ["activeTab", "clipboardWrite"],
   "content_scripts": [

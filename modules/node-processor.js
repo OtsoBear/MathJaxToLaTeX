@@ -38,13 +38,24 @@ function getNodeContent(node) {
     return textElem.textContent.trim();
   }
   
-  // Check for use element with data-c attribute
-  const useElem = findUseElement(node);
-  if (useElem) {
-    const dataC = getDataCAttribute(useElem);
-    if (dataC) {
-      return getUnicodeMapping(dataC);
+  // Check for multiple use elements with data-c attributes (for multi-digit numbers)
+  const useElems = findAllUseElements(node);
+  if (useElems && useElems.length > 0) {
+    let result = '';
+    for (let i = 0; i < useElems.length; i++) {
+      const useElem = useElems[i];
+      const dataC = getDataCAttribute(useElem);
+      if (dataC) {
+        const mapping = getUnicodeMapping(dataC);
+        // For multi-character sequences, remove trailing space from all but the last character
+        if (useElems.length > 1 && i < useElems.length - 1) {
+          result += mapping.replace(/\s+$/, '');
+        } else {
+          result += mapping;
+        }
+      }
     }
+    if (result) return result;
   }
   
   return '';
@@ -81,6 +92,43 @@ function findUseElement(node) {
   }
   
   return null;
+}
+
+/**
+ * Find all use elements in node (for multi-digit numbers)
+ */
+function findAllUseElements(node) {
+  if (!node) return [];
+  
+  const useElements = [];
+  
+  // Try querySelectorAll
+  if (node.querySelectorAll) {
+    const elems = node.querySelectorAll('use');
+    if (elems && elems.length > 0) {
+      return Array.from(elems);
+    }
+  }
+  
+  // Check children
+  if (node.children) {
+    for (const child of node.children) {
+      if (child.tagName && child.tagName.toLowerCase() === 'use') {
+        useElements.push(child);
+      }
+    }
+  }
+  
+  // Check childNodes if no children found
+  if (useElements.length === 0 && node.childNodes) {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 1 && child.tagName && child.tagName.toLowerCase() === 'use') {
+        useElements.push(child);
+      }
+    }
+  }
+  
+  return useElements;
 }
 
 /**
@@ -214,6 +262,7 @@ if (typeof module !== 'undefined' && module.exports) {
     processChildren,
     getNodeContent,
     findUseElement,
+    findAllUseElements,
     getDataCAttribute,
     getUnicodeMapping,
     isParenthesizedExpression,
@@ -226,6 +275,7 @@ if (typeof module !== 'undefined' && module.exports) {
     processChildren,
     getNodeContent,
     findUseElement,
+    findAllUseElements,
     getDataCAttribute,
     getUnicodeMapping,
     isParenthesizedExpression,
