@@ -1,223 +1,320 @@
 /**
  * SVG MathJax to LaTeX converter
+ * Refactored for better maintainability and smaller function sizes
  */
+
+// Handler registry for different node types
+const nodeHandlers = {};
+
+/**
+ * Register a handler for a specific node type
+ * @param {string} nodeType - The node type to handle
+ * @param {Function} handler - The handler function
+ */
+function registerHandler(nodeType, handler) {
+  nodeHandlers[nodeType] = handler;
+}
 
 /**
  * Convert SVG MathJax node to LaTeX
+ * Main entry point - delegates to specific handlers
  */
 function convertSVGNode(node, logger, nodeProcessor, operators, functions) {
-  const nodeType = node.getAttribute ? node.getAttribute('data-mml-node') : null;
-  
-  if (!nodeType) {
-    return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+  try {
+    const nodeType = node.getAttribute ? node.getAttribute('data-mml-node') : null;
+    
+    if (!nodeType) {
+      return nodeProcessor.processChildren(node, (child) =>
+        convertSVGNode(child, logger, nodeProcessor, operators, functions)
+      );
+    }
+    
+    const handler = nodeHandlers[nodeType];
+    if (handler) {
+      return handler(node, logger, nodeProcessor, operators, functions);
+    }
+    
+    // Default: process children
+    return nodeProcessor.processChildren(node, (child) =>
+      convertSVGNode(child, logger, nodeProcessor, operators, functions)
+    );
+  } catch (error) {
+    logger.error(`Error converting SVG node type ${nodeType}:`, error);
+    return '';
+  }
+}
+
+// Register handlers for each node type
+registerHandler('math', (node, logger, nodeProcessor, operators, functions) => {
+  return nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+});
+    
+registerHandler('semantics', handleSemantics);
+
+/**
+ * Handle semantics node
+ */
+function handleSemantics(node, logger, nodeProcessor, operators, functions) {
+  // Process only the first child (presentation MathML), ignoring annotations
+  if (node.children && node.children.length > 0) {
+    const mrowChild = node.children[0];
+    
+    // Check if this contains a cases environment (mfenced with mtable)
+    const hasMfenced = mrowChild.querySelector &&
+                       mrowChild.querySelector('[data-mml-node="mfenced"]');
+    
+    if (hasMfenced) {
+      return processSemanticsWithMfenced(mrowChild, logger, nodeProcessor, operators, functions);
+    }
+    
+    return convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
   }
   
-  // Handle different node types with a configuration object instead of switch
-  const handlers = {
-    'math': () => nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions)),
+  return nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+}
+
+/**
+ * Process semantics node that contains mfenced
+ */
+function processSemanticsWithMfenced(mrowChild, logger, nodeProcessor, operators, functions) {
+  const mfenced = Array.from(mrowChild.children || []).find(child =>
+    child.getAttribute && child.getAttribute('data-mml-node') === 'mfenced'
+  );
+  
+  if (!mfenced) return '';
+  
+  // Get any text that follows for inclusion in the cases
+  const siblings = Array.from(mrowChild.children || []);
+  const mfencedIndex = siblings.indexOf(mfenced);
+  let commaAndText = '';
+  
+  for (let i = mfencedIndex + 1; i < siblings.length; i++) {
+    const sibling = siblings[i];
+    const nodeType = sibling.getAttribute && sibling.getAttribute('data-mml-node');
     
-    'semantics': () => {
-      // Process only the first child (presentation MathML), ignoring annotations
-      if (node.children && node.children.length > 0) {
-        // Get the first mrow child which contains the actual math
-        const mrowChild = node.children[0];
-        
-        // Check if this contains a cases environment (mfenced with mtable)
-        const hasMfenced = mrowChild.querySelector && mrowChild.querySelector('[data-mml-node="mfenced"]');
-        if (hasMfenced) {
-          // Process only the mfenced, ignore siblings (comma and text that follow)
-          const mfenced = Array.from(mrowChild.children || []).find(child =>
-            child.getAttribute && child.getAttribute('data-mml-node') === 'mfenced'
-          );
-          
-          if (mfenced) {
-            // Get any text that follows for inclusion in the cases
-            const siblings = Array.from(mrowChild.children || []);
-            const mfencedIndex = siblings.indexOf(mfenced);
-            let commaAndText = '';
-            
-            for (let i = mfencedIndex + 1; i < siblings.length; i++) {
-              const sibling = siblings[i];
-              const nodeType = sibling.getAttribute && sibling.getAttribute('data-mml-node');
-              
-              if (nodeType === 'mo') {
-                const content = nodeProcessor.getNodeContent(sibling).trim();
-                logger.debug('Found mo node with content: "' + content + '"');
-                if (content === ',') {
-                  commaAndText += '{,}';
-                  logger.debug('Found comma in semantics');
-                }
-              } else if (nodeType === 'mtext') {
-                const text = nodeProcessor.getNodeContent(sibling).trim();
-                if (text) {
-                  // Normalize non-breaking spaces to regular spaces
-                  const normalizedText = text.replace(/\u00A0/g, ' ');
-                  commaAndText += '\\ \\text{' + normalizedText + '}';
-                  logger.debug('Found text in semantics: ' + normalizedText);
-                }
-              } else if (nodeType === 'mi') {
-                // Variable like 't' - use single backslash for spacing
-                const varContent = nodeProcessor.getNodeContent(sibling);
-                commaAndText += '\\ ' + varContent;
-                logger.debug('Found variable in semantics: ' + varContent);
-              }
-            }
-            
-            logger.debug('Comma and text to append: ' + commaAndText);
-            
-            // Pass the text to mfenced handler
-            return handleMfenced(mfenced, logger, nodeProcessor, operators, functions, commaAndText);
-          }
-        }
-        
-        return convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
+    if (nodeType === 'mo') {
+      const content = nodeProcessor.getNodeContent(sibling).trim();
+      logger.debug('Found mo node with content: "' + content + '"');
+      if (content === ',') {
+        commaAndText += '{,}';
+        logger.debug('Found comma in semantics');
       }
-      return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
-    },
-    
-    'mfenced': () => handleMfenced(node, logger, nodeProcessor, operators, functions),
-    
-    'mtable': () => handleMtable(node, logger, nodeProcessor, operators, functions),
-    
-    'mtr': () => handleMtr(node, logger, nodeProcessor, operators, functions),
-    
-    'mtd': () => nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions)),
-    
-    'mrow': () => handleMrow(node, logger, nodeProcessor, operators, functions),
-    
-    'mi': () => handleMi(node, nodeProcessor, functions),
-    
-    'mn': () => nodeProcessor.getNodeContent(node),
-    
-    'mo': () => handleMo(node, nodeProcessor, operators),
-    
-    'mtext': () => {
-      const text = nodeProcessor.getNodeContent(node).trim();
-      // Handle special characters
-      if (text === 'π') {
-        return '\\pi ';
-      } else if (text === 'd') {
-        // Don't wrap 'd' in \text{} for differentials
-        return 'd';
-      } else if (text) {
+    } else if (nodeType === 'mtext') {
+      const text = nodeProcessor.getNodeContent(sibling).trim();
+      if (text) {
         // Normalize non-breaking spaces to regular spaces
         const normalizedText = text.replace(/\u00A0/g, ' ');
-        // Wrap other text in \text{}
-        return '\\text{' + normalizedText + '}';
+        commaAndText += '\\ \\text{' + normalizedText + '}';
+        logger.debug('Found text in semantics: ' + normalizedText);
       }
-      return text;
-    },
-    
-    'msqrt': () => {
-      const content = nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
-      logger.progress('Processed square root');
-      return '\\sqrt{' + content.trim() + '}';
-    },
-    
-    'mroot': () => {
-      // Handle nth root (cube root, etc.)
-      logger.debug('Processing mroot node with', node.children ? node.children.length : 0, 'children');
-      
-      if (node.children && node.children.length >= 2) {
-        let rootIndex = null;
-        let contentNodes = [];
-        
-        // Process all children to find index and content
-        for (const child of node.children) {
-          const nodeType = child.getAttribute && child.getAttribute('data-mml-node');
-          logger.debug('mroot child:', nodeType);
-          
-          if (nodeType === 'mn') {
-            const content = nodeProcessor.getNodeContent(child);
-            logger.debug('Found mn in mroot with content:', JSON.stringify(content));
-            // Check if this looks like a root index (small number)
-            const trimmedContent = content ? content.trim() : '';
-            logger.debug('Trimmed content:', JSON.stringify(trimmedContent));
-            if (trimmedContent && trimmedContent.match(/^[2-9]$/)) {
-              rootIndex = trimmedContent;
-              logger.debug('Set root index to:', rootIndex);
-            } else {
-              logger.debug('Content did not match root index pattern:', JSON.stringify(trimmedContent));
-            }
-          } else if (nodeType === 'mo') {
-            // Skip the radical symbol
-            const opContent = nodeProcessor.getNodeContent(child);
-            logger.debug('Found mo in mroot with content:', opContent);
-            if (opContent && (opContent.includes('√') || opContent.includes('221A'))) {
-              continue; // Skip radical symbol
-            }
-          } else if (nodeType !== 'mo') {
-            // This is content (not the radical symbol)
-            contentNodes.push(child);
-          }
-        }
-        
-        // If we didn't find content nodes as direct children, look for a wrapper group
-        if (contentNodes.length === 0) {
-          for (const child of node.children) {
-            if (!child.getAttribute || child.getAttribute('data-mml-node') !== 'mn' && child.getAttribute('data-mml-node') !== 'mo') {
-              // This might be a wrapper group containing the content
-              contentNodes.push(child);
-            }
-          }
-        }
-        
-        // Convert the content
-        const rootContent = contentNodes.map(child =>
-          convertSVGNode(child, logger, nodeProcessor, operators, functions)
-        ).join('').trim();
-        
-        logger.debug('mroot - index:', rootIndex, 'content:', rootContent);
-        
-        if (rootIndex && rootContent) {
-          logger.progress('Processed nth root with index ' + rootIndex);
-          return '\\sqrt[' + rootIndex + ']{' + rootContent + '}';
-        }
-      }
-      
-      // Fallback: treat as regular square root
-      const content = nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
-      logger.progress('Processed root (fallback to square root)');
-      return '\\sqrt{' + content.trim() + '}';
-    },
-    
-    'mfrac': () => {
-      if (node.children && node.children.length >= 2) {
-        const num = convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
-        const den = convertSVGNode(node.children[1], logger, nodeProcessor, operators, functions);
-        logger.progress('Processed fraction');
-        return '\\frac{' + num + '}{' + den + '}';
-      }
-      return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
-    },
-    
-    'msup': () => handleSuperscript(node, logger, nodeProcessor, operators, functions),
-    
-    'msub': () => {
-      if (node.children && node.children.length >= 2) {
-        const base = convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
-        const sub = convertSVGNode(node.children[1], logger, nodeProcessor, operators, functions);
-        return base + '_{' + sub + '}';
-      }
-      return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
-    },
-    
-    'munderover': () => handleUnderOver(node, logger, nodeProcessor, operators, functions),
-    
-    'mover': () => handleOver(node, logger, nodeProcessor, operators, functions),
-    
-    'mstyle': () => nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions))
-  };
-  
-  const handler = handlers[nodeType];
-  if (handler) {
-    return handler();
+    } else if (nodeType === 'mi') {
+      // Variable like 't' - use single backslash for spacing
+      const varContent = nodeProcessor.getNodeContent(sibling);
+      commaAndText += '\\ ' + varContent;
+      logger.debug('Found variable in semantics: ' + varContent);
+    }
   }
   
-  // Default: process children
-  logger.debug(`mrow result:`, nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions)).substring(0, 50) + '...');
-  return nodeProcessor.processChildren(node, (child) => convertSVGNode(child, logger, nodeProcessor, operators, functions));
+  logger.debug('Comma and text to append: ' + commaAndText);
+  
+  // Pass the text to mfenced handler
+  return handleMfenced(mfenced, logger, nodeProcessor, operators, functions, commaAndText);
 }
+    
+// Register simple handlers
+registerHandler('mfenced', (node, logger, nodeProcessor, operators, functions) =>
+  handleMfenced(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mtable', (node, logger, nodeProcessor, operators, functions) =>
+  handleMtable(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mtr', (node, logger, nodeProcessor, operators, functions) =>
+  handleMtr(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mtd', (node, logger, nodeProcessor, operators, functions) =>
+  nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  )
+);
+
+registerHandler('mrow', (node, logger, nodeProcessor, operators, functions) =>
+  handleMrow(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mi', (node, logger, nodeProcessor, operators, functions) =>
+  handleMi(node, nodeProcessor, functions)
+);
+
+registerHandler('mn', (node, logger, nodeProcessor) =>
+  nodeProcessor.getNodeContent(node)
+);
+
+registerHandler('mo', (node, logger, nodeProcessor, operators) =>
+  handleMo(node, nodeProcessor, operators)
+);
+
+registerHandler('mtext', handleMtext);
+
+/**
+ * Handle mtext node
+ */
+function handleMtext(node, logger, nodeProcessor) {
+  const text = nodeProcessor.getNodeContent(node).trim();
+  
+  // Handle special characters
+  if (text === 'π') {
+    return '\\pi ';
+  } else if (text === 'd') {
+    // Don't wrap 'd' in \text{} for differentials
+    return 'd';
+  } else if (text) {
+    // Normalize non-breaking spaces to regular spaces
+    const normalizedText = text.replace(/\u00A0/g, ' ');
+    // Wrap other text in \text{}
+    return '\\text{' + normalizedText + '}';
+  }
+  return text;
+}
+
+registerHandler('msqrt', (node, logger, nodeProcessor, operators, functions) => {
+  const content = nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+  logger.progress('Processed square root');
+  return '\\sqrt{' + content.trim() + '}';
+});
+    
+registerHandler('mroot', handleMroot);
+
+/**
+ * Handle mroot (nth root) node
+ */
+function handleMroot(node, logger, nodeProcessor, operators, functions) {
+  logger.debug('Processing mroot node with', node.children ? node.children.length : 0, 'children');
+  
+  if (node.children && node.children.length >= 2) {
+    const { rootIndex, contentNodes } = extractRootComponents(node, logger, nodeProcessor);
+    
+    // Convert the content
+    const rootContent = contentNodes.map(child =>
+      convertSVGNode(child, logger, nodeProcessor, operators, functions)
+    ).join('').trim();
+    
+    logger.debug('mroot - index:', rootIndex, 'content:', rootContent);
+    
+    if (rootIndex && rootContent) {
+      logger.progress('Processed nth root with index ' + rootIndex);
+      return '\\sqrt[' + rootIndex + ']{' + rootContent + '}';
+    }
+  }
+  
+  // Fallback: treat as regular square root
+  const content = nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+  logger.progress('Processed root (fallback to square root)');
+  return '\\sqrt{' + content.trim() + '}';
+}
+
+/**
+ * Extract root index and content nodes from mroot
+ */
+function extractRootComponents(node, logger, nodeProcessor) {
+  let rootIndex = null;
+  let contentNodes = [];
+  
+  // Process all children to find index and content
+  for (const child of node.children) {
+    const nodeType = child.getAttribute && child.getAttribute('data-mml-node');
+    logger.debug('mroot child:', nodeType);
+    
+    if (nodeType === 'mn') {
+      const content = nodeProcessor.getNodeContent(child);
+      logger.debug('Found mn in mroot with content:', JSON.stringify(content));
+      // Check if this looks like a root index (small number)
+      const trimmedContent = content ? content.trim() : '';
+      logger.debug('Trimmed content:', JSON.stringify(trimmedContent));
+      if (trimmedContent && trimmedContent.match(/^[2-9]$/)) {
+        rootIndex = trimmedContent;
+        logger.debug('Set root index to:', rootIndex);
+      } else {
+        logger.debug('Content did not match root index pattern:', JSON.stringify(trimmedContent));
+      }
+    } else if (nodeType === 'mo') {
+      // Skip the radical symbol
+      const opContent = nodeProcessor.getNodeContent(child);
+      logger.debug('Found mo in mroot with content:', opContent);
+      if (opContent && (opContent.includes('√') || opContent.includes('221A'))) {
+        continue; // Skip radical symbol
+      }
+    } else if (nodeType !== 'mo') {
+      // This is content (not the radical symbol)
+      contentNodes.push(child);
+    }
+  }
+  
+  // If we didn't find content nodes as direct children, look for a wrapper group
+  if (contentNodes.length === 0) {
+    for (const child of node.children) {
+      if (!child.getAttribute ||
+          (child.getAttribute('data-mml-node') !== 'mn' &&
+           child.getAttribute('data-mml-node') !== 'mo')) {
+        // This might be a wrapper group containing the content
+        contentNodes.push(child);
+      }
+    }
+  }
+  
+  return { rootIndex, contentNodes };
+}
+    
+registerHandler('mfrac', (node, logger, nodeProcessor, operators, functions) => {
+  if (node.children && node.children.length >= 2) {
+    const num = convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
+    const den = convertSVGNode(node.children[1], logger, nodeProcessor, operators, functions);
+    logger.progress('Processed fraction');
+    return '\\frac{' + num + '}{' + den + '}';
+  }
+  return nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+});
+
+registerHandler('msup', (node, logger, nodeProcessor, operators, functions) =>
+  handleSuperscript(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('msub', (node, logger, nodeProcessor, operators, functions) => {
+  if (node.children && node.children.length >= 2) {
+    const base = convertSVGNode(node.children[0], logger, nodeProcessor, operators, functions);
+    const sub = convertSVGNode(node.children[1], logger, nodeProcessor, operators, functions);
+    return base + '_{' + sub + '}';
+  }
+  return nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  );
+});
+
+registerHandler('munderover', (node, logger, nodeProcessor, operators, functions) =>
+  handleUnderOver(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mover', (node, logger, nodeProcessor, operators, functions) =>
+  handleOver(node, logger, nodeProcessor, operators, functions)
+);
+
+registerHandler('mstyle', (node, logger, nodeProcessor, operators, functions) =>
+  nodeProcessor.processChildren(node, (child) =>
+    convertSVGNode(child, logger, nodeProcessor, operators, functions)
+  )
+);
 
 function handleMrow(node, logger, nodeProcessor, operators, functions) {
   logger.debug('Processing mrow with', node.children ? node.children.length : 0, 'children');

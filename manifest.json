@@ -1,23 +1,25 @@
 {
   "manifest_version": 3,
-  "name": "MathJax Copy Tool",
-  "version": "2.5",
-  "description": "Copy LaTeX from MathJax elements by clicking on them",
+  "name": "MathJax to LaTeX",
+  "version": "3.0.0",
+  "description": "Convert MathJax equations to LaTeX format with a single click",
   "permissions": ["activeTab", "clipboardWrite"],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": [
+        "config/settings.js",
         "config/operators.js",
         "config/functions.js",
+        "modules/module-loader.js",
         "modules/logger.js",
         "modules/node-processor.js",
         "modules/svg-converter.js",
         "modules/chtml-converter.js",
+        "utils.js",
         "fileunicode.js",
         "translate.js",
-        "content.js",
-        "popup.js"
+        "content.js"
       ],
       "css": ["styles.css"]
     }
@@ -25,7 +27,7 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-    "48": "icon.png"
+      "48": "icon.png"
     }
   },
   "icons": {

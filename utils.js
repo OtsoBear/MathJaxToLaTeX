@@ -1,19 +1,44 @@
 /**
  * MathJaxToLaTeX - Utility Functions
- * 
+ *
  * This module provides utility functions to avoid code duplication
  * and prevent global prototype pollution
  */
 
-/**
- * Safely parse HTML string using DOMParser
- * @param {string} htmlString - The HTML string to parse
- * @returns {HTMLElement} - The parsed element
- */
-export function safeParseHTML(htmlString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div>${htmlString}</div>`, 'text/html');
-  return doc.body.firstChild;
+(function() {
+  'use strict';
+
+  // Configuration constants
+  const FEEDBACK_DURATION = 2000;
+
+  /**
+   * Safely parse HTML string using DOMParser with sanitization
+   * @param {string} htmlString - The HTML string to parse
+   * @returns {HTMLElement|null} - The parsed element or null if parsing fails
+   */
+  function safeParseHTML(htmlString) {
+  try {
+    // Basic sanitization - remove script tags and event handlers
+    const sanitized = htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/on\w+\s*=\s*'[^']*'/gi, '');
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${sanitized}</div>`, 'text/html');
+    
+    // Check for parsing errors
+    const parseError = doc.querySelector('parsererror');
+    if (parseError) {
+      console.error('[ERROR] HTML parsing failed:', parseError.textContent);
+      return null;
+    }
+    
+    return doc.body.firstChild;
+  } catch (error) {
+    console.error('[ERROR] Failed to parse HTML:', error);
+    return null;
+  }
 }
 
 /**
@@ -21,16 +46,30 @@ export function safeParseHTML(htmlString) {
  * @param {string} text - Text to copy
  * @param {HTMLElement} element - Element to show feedback near
  * @param {string} successMessage - Success log message
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} - True if successful, false otherwise
  */
-export async function copyToClipboardWithFeedback(text, element, successMessage = 'Copied to clipboard') {
+async function copyToClipboardWithFeedback(text, element, successMessage = 'Copied to clipboard') {
   try {
-    await navigator.clipboard.writeText(text);
+    // Remove trailing single "." if it exists
+    let cleanedText = text;
+    if (cleanedText.endsWith('.') && !cleanedText.endsWith('..') && !cleanedText.endsWith('\\ldots')) {
+      cleanedText = cleanedText.slice(0, -1);
+    }
+    
+    await navigator.clipboard.writeText(cleanedText);
     showCopiedFeedback(element);
-    console.log(`[SUCCESS] ${successMessage}: ${text}`);
+    
+    // Use configured logger if available
+    if (window.conversionLogger && window.conversionLogger.success) {
+      window.conversionLogger.success(successMessage, cleanedText);
+    }
+    
+    return true;
   } catch (err) {
-    console.error('[ERROR] Failed to copy: ', err);
-    throw err;
+    if (window.conversionLogger && window.conversionLogger.error) {
+      window.conversionLogger.error('Failed to copy to clipboard', err);
+    }
+    return false;
   }
 }
 
@@ -38,7 +77,9 @@ export async function copyToClipboardWithFeedback(text, element, successMessage 
  * Shows feedback when content is copied
  * @param {HTMLElement} element - The element that was clicked to copy
  */
-export function showCopiedFeedback(element) {
+function showCopiedFeedback(element) {
+  if (!element) return;
+  
   const feedback = document.createElement('div');
   feedback.textContent = 'Copied!';
   feedback.className = 'mathjax-copy-feedback';
@@ -55,7 +96,7 @@ export function showCopiedFeedback(element) {
     border-radius: 4px;
     pointer-events: none;
     z-index: 10000;
-    animation: fade-out 2s forwards;
+    animation: fade-out ${FEEDBACK_DURATION}ms forwards;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 14px;
     font-weight: 500;
@@ -80,28 +121,7 @@ export function showCopiedFeedback(element) {
   // Remove after animation
   setTimeout(() => {
     feedback.remove();
-  }, 2000);
-}
-
-/**
- * Wrap event listener to handle text selection
- * @param {string} eventType - The event type
- * @param {Function} listener - The original listener
- * @param {Function} isAllowedTextArea - Function to check if element is allowed text area
- * @returns {Function} - Wrapped listener
- */
-export function wrapEventListenerForTextSelection(eventType, listener, isAllowedTextArea) {
-  if (['pointerup', 'pointerdown', 'mousedown', 'mouseup'].includes(eventType)) {
-    return function wrappedListener(event) {
-      const isTextContent = isAllowedTextArea(event.target);
-      
-      if (!isTextContent) {
-        setTimeout(() => window.getSelection().removeAllRanges(), 0);
-      }
-      return listener.apply(this, arguments);
-    };
-  }
-  return listener;
+  }, FEEDBACK_DURATION);
 }
 
 /**
@@ -112,7 +132,9 @@ export function wrapEventListenerForTextSelection(eventType, listener, isAllowed
  * @param {Array} cleanupFunctions - Array to store cleanup functions
  * @param {boolean} useCapture - Whether to use capture phase
  */
-export function attachEventWithCleanup(element, eventType, handler, cleanupFunctions, useCapture = false) {
+function attachEventWithCleanup(element, eventType, handler, cleanupFunctions, useCapture = false) {
+  if (!element || !handler) return;
+  
   element.addEventListener(eventType, handler, useCapture);
   cleanupFunctions.push(() => {
     element.removeEventListener(eventType, handler, useCapture);
@@ -124,12 +146,19 @@ export function attachEventWithCleanup(element, eventType, handler, cleanupFunct
  * @param {Function} callback - Observer callback
  * @param {Node} target - Target node to observe
  * @param {Object} options - Observer options
- * @returns {MutationObserver} - The created observer
+ * @returns {MutationObserver|null} - The created observer or null if creation fails
  */
-export function createObserverWithCleanup(callback, target, options) {
-  const observer = new MutationObserver(callback);
-  observer.observe(target, options);
-  return observer;
+function createObserverWithCleanup(callback, target, options) {
+  if (!callback || !target) return null;
+  
+  try {
+    const observer = new MutationObserver(callback);
+    observer.observe(target, options);
+    return observer;
+  } catch (error) {
+    console.error('[ERROR] Failed to create MutationObserver:', error);
+    return null;
+  }
 }
 
 /**
@@ -137,10 +166,73 @@ export function createObserverWithCleanup(callback, target, options) {
  * @param {Function} callback - Interval callback
  * @param {number} delay - Interval delay
  * @param {Array} intervalIds - Array to store interval IDs
- * @returns {number} - The interval ID
+ * @returns {number|null} - The interval ID or null if creation fails
  */
-export function setIntervalWithCleanup(callback, delay, intervalIds) {
+function setIntervalWithCleanup(callback, delay, intervalIds) {
+  if (!callback || !intervalIds) return null;
+  
   const intervalId = setInterval(callback, delay);
   intervalIds.push(intervalId);
   return intervalId;
 }
+
+/**
+ * Debounce function to limit execution frequency
+ * @param {Function} func - Function to debounce
+ * @param {number} wait - Wait time in milliseconds
+ * @returns {Function} - Debounced function
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+/**
+ * Throttle function to limit execution frequency
+ * @param {Function} func - Function to throttle
+ * @param {number} limit - Time limit in milliseconds
+ * @returns {Function} - Throttled function
+ */
+function throttle(func, limit) {
+  let inThrottle;
+  return function(...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
+  // Export for both browser and Node.js environments
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      safeParseHTML,
+      copyToClipboardWithFeedback,
+      showCopiedFeedback,
+      attachEventWithCleanup,
+      createObserverWithCleanup,
+      setIntervalWithCleanup,
+      debounce,
+      throttle
+    };
+  } else if (typeof window !== 'undefined') {
+    window.extensionUtils = {
+      safeParseHTML,
+      copyToClipboardWithFeedback,
+      showCopiedFeedback,
+      attachEventWithCleanup,
+      createObserverWithCleanup,
+      setIntervalWithCleanup,
+      debounce,
+      throttle
+    };
+  }
+})();
