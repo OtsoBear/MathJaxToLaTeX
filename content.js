@@ -41,13 +41,80 @@ const {
   throttle
 } = utils;
 
-// Cache for storing previous conversions
-let conversionCache = {
-  input: null,
-  result: null
-};
+// LRU Cache for storing previous conversions with size-based eviction
+class LRUCache {
+  constructor(maxItems = 1000, maxSizeBytes = 100000) {
+    this.maxItems = maxItems;
+    this.maxSizeBytes = maxSizeBytes; // ~100KB default
+    this.cache = new Map();
+    this.currentSizeBytes = 0;
+  }
+  
+  _estimateSize(str) {
+    // Rough estimate: 2 bytes per character for Unicode strings
+    return str ? str.length * 2 : 0;
+  }
+  
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    // Move to end (most recently used)
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+  
+  set(key, value) {
+    // Calculate size of new entry
+    const keySize = this._estimateSize(key);
+    const valueSize = this._estimateSize(value);
+    const entrySize = keySize + valueSize;
+    
+    // Remove if exists (to update position)
+    if (this.cache.has(key)) {
+      const oldValue = this.cache.get(key);
+      const oldSize = keySize + this._estimateSize(oldValue);
+      this.currentSizeBytes -= oldSize;
+      this.cache.delete(key);
+    }
+    
+    // Add to end
+    this.cache.set(key, value);
+    this.currentSizeBytes += entrySize;
+    
+    // Remove oldest entries if over limits
+    while ((this.cache.size > this.maxItems || this.currentSizeBytes > this.maxSizeBytes) && this.cache.size > 1) {
+      const firstKey = this.cache.keys().next().value;
+      const firstValue = this.cache.get(firstKey);
+      const removeSize = this._estimateSize(firstKey) + this._estimateSize(firstValue);
+      this.cache.delete(firstKey);
+      this.currentSizeBytes -= removeSize;
+    }
+  }
+  
+  clear() {
+    this.cache.clear();
+    this.currentSizeBytes = 0;
+  }
+  
+  getStats() {
+    return {
+      items: this.cache.size,
+      sizeBytes: this.currentSizeBytes,
+      sizeKB: (this.currentSizeBytes / 1024).toFixed(2)
+    };
+  }
+}
 
-// Store cleanup functions and observers
+// Create cache with generous limits:
+// - 1000 items minimum
+// - 10MB maximum size (very generous for LaTeX strings)
+let conversionCache = new LRUCache(1000, 10 * 1024 * 1024);
+
+// Store cleanup functions and observers with size limits
+const MAX_CLEANUP_FUNCTIONS = 100;
+const MAX_INTERVAL_IDS = 10;
+
 let cleanupFunctions = [];
 let observers = {
   mathJax: null,
@@ -68,10 +135,11 @@ function convertToLatex(mathmlInput) {
       return "Invalid input provided";
     }
     
-    // Use cache if input hasn't changed
-    if (mathmlInput === conversionCache.input && conversionCache.result !== null) {
+    // Use cache if we have this input
+    const cachedResult = conversionCache.get(mathmlInput);
+    if (cachedResult !== null) {
       logDebug('Using cached LaTeX result');
-      return conversionCache.result;
+      return cachedResult;
     }
     
     // Parse the MathML input safely
@@ -105,8 +173,7 @@ function convertToLatex(mathmlInput) {
     }
     
     // Cache the result
-    conversionCache.input = mathmlInput;
-    conversionCache.result = latex;
+    conversionCache.set(mathmlInput, latex);
     
     return latex;
   } catch (error) {
@@ -460,6 +527,17 @@ function permanentlyDisableMenuPanels() {
       { childList: true }
     );
     
+    // Limit interval IDs to prevent memory leak
+    if (intervalIds.length >= MAX_INTERVAL_IDS) {
+      // Clear oldest interval
+      const oldId = intervalIds.shift();
+      try {
+        clearInterval(oldId);
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+    
     setIntervalWithCleanup(() => {
       if (!document.getElementById('menu-panel-disabler')) {
         document.head.appendChild(styleEl.cloneNode(true));
@@ -728,10 +806,7 @@ function cleanup() {
     cleanupFunctions = [];
     
     // Clear cache
-    conversionCache = {
-      input: null,
-      result: null
-    };
+    conversionCache.clear();
     
     logDebug('Cleanup completed');
   } catch (error) {

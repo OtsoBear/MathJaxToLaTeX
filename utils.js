@@ -136,9 +136,26 @@ function attachEventWithCleanup(element, eventType, handler, cleanupFunctions, u
   if (!element || !handler) return;
   
   element.addEventListener(eventType, handler, useCapture);
-  cleanupFunctions.push(() => {
-    element.removeEventListener(eventType, handler, useCapture);
-  });
+  
+  // Prevent unbounded growth of cleanup functions array
+  const MAX_CLEANUP_FUNCTIONS = 100;
+  if (cleanupFunctions && cleanupFunctions.length >= MAX_CLEANUP_FUNCTIONS) {
+    // Execute and remove oldest cleanup functions
+    const toRemove = cleanupFunctions.splice(0, 10);
+    toRemove.forEach(fn => {
+      try {
+        fn();
+      } catch (e) {
+        // Ignore errors from old cleanup functions
+      }
+    });
+  }
+  
+  if (cleanupFunctions) {
+    cleanupFunctions.push(() => {
+      element.removeEventListener(eventType, handler, useCapture);
+    });
+  }
 }
 
 /**
